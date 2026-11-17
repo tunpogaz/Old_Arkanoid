@@ -1383,6 +1383,10 @@ class Game {
 
     const volumeSlider = document.getElementById('volumeSlider');
     const volumeValue = document.getElementById('volumeValue');
+    volumeSlider.addEventListener('wheel', e => {
+      // Chrome changes a focused range input on wheel scroll; keep scrolling harmless.
+      e.preventDefault();
+    }, { passive: false });
     volumeSlider.addEventListener('input', () => {
       sounds.init();
       const percent = Number(volumeSlider.value);
