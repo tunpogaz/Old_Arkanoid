@@ -34,6 +34,7 @@ class Game {
     this.maxCombo = 0;
     this.comboTimer = 0;
     this.frameCount = 0;
+    this.keys = { left: false, right: false };
 
     this.paddle = new Paddle(CANVAS_WIDTH, CANVAS_HEIGHT);
     this.balls = [];
@@ -271,6 +272,15 @@ class Game {
   update() {
     if (this.state !== GAME_STATES.PLAYING) return;
     this.frameCount++;
+
+    // Smooth keyboard control
+    if (this.keys.left && !this.keys.right) {
+      this.paddle.moveLeft();
+    } else if (this.keys.right && !this.keys.left) {
+      this.paddle.moveRight();
+    } else {
+      this.paddle.stop();
+    }
 
     this.paddle.update(sounds);
 
@@ -561,9 +571,9 @@ class Game {
     window.addEventListener('keydown', e => {
       sounds.init();
       if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') {
-        this.paddle.moveLeft();
+        this.keys.left = true;
       } else if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') {
-        this.paddle.moveRight();
+        this.keys.right = true;
       } else if (e.key === ' ' || e.key === 'Spacebar') {
         if (this.state === GAME_STATES.PLAYING) {
           this.paddle.fire(sounds);
@@ -577,17 +587,10 @@ class Game {
     });
 
     window.addEventListener('keyup', e => {
-      if (['ArrowLeft', 'ArrowRight', 'a', 'd', 'A', 'D'].includes(e.key)) {
-        this.paddle.stop();
-      }
-    });
-
-    this.canvas.addEventListener('mousemove', e => {
-      if (this.state === GAME_STATES.PLAYING) {
-        const rect = this.canvas.getBoundingClientRect();
-        const scaleX = CANVAS_WIDTH / rect.width;
-        const mouseX = (e.clientX - rect.left) * scaleX;
-        this.paddle.moveTo(mouseX);
+      if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') {
+        this.keys.left = false;
+      } else if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') {
+        this.keys.right = false;
       }
     });
 
