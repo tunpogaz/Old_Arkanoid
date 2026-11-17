@@ -1,0 +1,25 @@
+services:
+  # Backend Spring Boot API Web Service
+  - type: web
+    name: arkanoid-backend
+    runtime: docker
+    dockerfilePath: server/Dockerfile
+    dockerContext: server
+    plan: free
+    region: singapore
+    envVars:
+      - key: PORT
+        value: 8080
+
+  # Frontend Static Site
+  - type: web
+    name: arkanoid-frontend
+    runtime: static
+    rootDir: client
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    plan: free
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
