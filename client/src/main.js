@@ -28,7 +28,7 @@ class Game {
 
     this.state = GAME_STATES.MENU;
     this.currentLevel = 1;
-    this.unlockedLevel = 1; // Unlocked progression
+    this.unlockedLevel = 1;
     this.score = 0;
     this.combo = 0;
     this.maxCombo = 0;
@@ -104,7 +104,8 @@ class Game {
     this.paddle.reset();
     this.paddle.lives = 3;
 
-    this.balls = [new Ball(this.paddle.x + this.paddle.w / 2, this.paddle.y - 12)];
+    // Ball starts attached to paddle until launched
+    this.balls = [new Ball(this.paddle.x + this.paddle.w / 2, this.paddle.y - 14, true)];
     this.powerups = [];
     this.combo = 0;
 
@@ -160,7 +161,7 @@ class Game {
     }
 
     this.paddle.reset();
-    this.balls = [new Ball(this.paddle.x + this.paddle.w / 2, this.paddle.y - 12)];
+    this.balls = [new Ball(this.paddle.x + this.paddle.w / 2, this.paddle.y - 14, true)];
     this.powerups = [];
     this.loadMap(this.currentLevel);
     sounds.playBgm(this.currentLevel);
@@ -188,31 +189,80 @@ class Game {
           }
         }
       } else {
-        this.balls = [new Ball(this.paddle.x + this.paddle.w / 2, this.paddle.y - 12)];
+        // Respawn attached ball on paddle
+        this.balls = [new Ball(this.paddle.x + this.paddle.w / 2, this.paddle.y - 14, true)];
       }
     }
   }
 
+  // Unified Brick Hit handling for both Ball and Bullets
+  hitBrick(brick, isBullet = false) {
+    if (brick.destroyed) return;
+    if (brick.isImmortal()) {
+      sounds.playTone(600, 0.05, 'triangle');
+      return;
+    }
+
+    this.combo++;
+    this.comboTimer = 180;
+    if (this.combo > this.maxCombo) this.maxCombo = this.combo;
+
+    const comboMultiplier = this.combo >= 5 ? 3 : this.combo >= 3 ? 2 : 1;
+    const pts = brick.points * comboMultiplier;
+    this.score += pts;
+
+    this.particles.createBrickExplosion(brick.x, brick.y, brick.w, brick.h, brick.getColor());
+    if (comboMultiplier > 1 && !isBullet) {
+      this.particles.addFloatingText(`${comboMultiplier}x COMBO!`, brick.x + brick.w / 2, brick.y - 10, '#ec4899');
+    }
+
+    brick.takeHit();
+    sounds.playBrickHit(brick.type);
+
+    // CRITICAL FIX: Bombs and Area Blast explode immediately on bullet OR ball hit!
+    if (brick.type === BRICK_TYPES.AREA_BLAST || brick.type === BRICK_TYPES.FALL_BOMB) {
+      this.triggerAreaBlast(brick);
+    }
+
+    const pu = brick.spawnPowerUp();
+    if (pu) this.powerups.push(pu);
+  }
+
   triggerAreaBlast(centerBrick) {
     sounds.playExplosion();
-    this.particles.triggerScreenShake(12);
+    this.particles.triggerScreenShake(14);
+    this.particles.addFloatingText('BOOM! 💥', centerBrick.x + centerBrick.w / 2, centerBrick.y - 10, '#f97316');
+
+    const blastRadius = 150;
+    const toChain = [];
 
     for (const b of this.bricks) {
-      if (b.destroyed || b.isImmortal()) continue;
+      if (b.destroyed || b === centerBrick || b.isImmortal()) continue;
       const dist = Math.hypot(b.x - centerBrick.x, b.y - centerBrick.y);
-      if (dist < 150) {
+      if (dist <= blastRadius) {
         b.destroyed = true;
         this.score += b.points;
         this.particles.createBrickExplosion(b.x, b.y, b.w, b.h, b.getColor());
         const pu = b.spawnPowerUp();
         if (pu) this.powerups.push(pu);
+
+        if (b.type === BRICK_TYPES.AREA_BLAST || b.type === BRICK_TYPES.FALL_BOMB) {
+          toChain.push(b);
+        }
       }
+    }
+
+    for (const cb of toChain) {
+      setTimeout(() => {
+        sounds.playExplosion();
+        this.particles.createBrickExplosion(cb.x, cb.y, cb.w, cb.h, '#ef4444');
+      }, 90);
     }
   }
 
   triggerFallBoom() {
     sounds.playExplosion();
-    this.particles.triggerScreenShake(15);
+    this.particles.triggerScreenShake(16);
     let count = 0;
     for (const b of this.bricks) {
       if (!b.destroyed && !b.isImmortal() && count < 8) {
@@ -239,7 +289,7 @@ class Game {
         const currentCount = this.balls.length;
         for (let i = 0; i < currentCount; i++) {
           const b = this.balls[i];
-          const b2 = new Ball(b.x, b.y);
+          const b2 = new Ball(b.x, b.y, false);
           b2.dx = -b.dx * 1.05;
           b2.dy = b.dy;
           this.balls.push(b2);
@@ -273,7 +323,7 @@ class Game {
     if (this.state !== GAME_STATES.PLAYING) return;
     this.frameCount++;
 
-    // Smooth keyboard control
+    // Keyboard movement
     if (this.keys.left && !this.keys.right) {
       this.paddle.moveLeft();
     } else if (this.keys.right && !this.keys.left) {
@@ -289,6 +339,7 @@ class Game {
       if (this.comboTimer <= 0) this.combo = 0;
     }
 
+    // Dynamic Bricks
     if (this.currentLevel >= 4 && this.frameCount % 24 === 0) {
       const shift = Math.sin(this.frameCount * 0.05) * 1.5;
       for (const b of this.bricks) {
@@ -308,6 +359,7 @@ class Game {
       }
     }
 
+    // Balls Update
     for (let i = this.balls.length - 1; i >= 0; i--) {
       const ball = this.balls[i];
       const hitPaddle = ball.update(this.bounds, this.paddle, sounds, this.particles);
@@ -320,53 +372,30 @@ class Game {
         continue;
       }
 
-      for (const brick of this.bricks) {
-        if (brick.destroyed) continue;
-        if (brick.checkCollision(ball)) {
-          sounds.playBrickHit(brick.type);
-
-          if (!brick.isImmortal()) {
-            this.combo++;
-            this.comboTimer = 180;
-            if (this.combo > this.maxCombo) this.maxCombo = this.combo;
-
-            const comboMultiplier = this.combo >= 5 ? 3 : this.combo >= 3 ? 2 : 1;
-            const pts = brick.points * comboMultiplier;
-            this.score += pts;
-
-            this.particles.createBrickExplosion(brick.x, brick.y, brick.w, brick.h, brick.getColor());
-            if (comboMultiplier > 1) {
-              this.particles.addFloatingText(`${comboMultiplier}x COMBO!`, brick.x + brick.w / 2, brick.y - 10, '#ec4899');
-            }
-
-            if (brick.type === BRICK_TYPES.AREA_BLAST) {
-              this.triggerAreaBlast(brick);
-            }
-
-            brick.takeHit();
-            const pu = brick.spawnPowerUp();
-            if (pu) this.powerups.push(pu);
+      // Ball vs Bricks collision
+      if (!ball.isAttached) {
+        for (const brick of this.bricks) {
+          if (brick.destroyed) continue;
+          if (brick.checkCollision(ball)) {
+            this.hitBrick(brick, false);
+            break;
           }
-          break;
         }
       }
     }
 
+    // Bullets vs Bricks collision
     for (const bullet of this.paddle.bullets) {
       for (const brick of this.bricks) {
         if (!brick.destroyed && brick.checkBulletCollision(bullet)) {
           bullet.active = false;
-          brick.takeHit();
-          sounds.playBrickHit(brick.type);
-          this.score += brick.points;
-          this.particles.createBrickExplosion(brick.x, brick.y, brick.w, brick.h, brick.getColor());
-          const pu = brick.spawnPowerUp();
-          if (pu) this.powerups.push(pu);
+          this.hitBrick(brick, true);
           break;
         }
       }
     }
 
+    // Powerups Update
     for (let i = this.powerups.length - 1; i >= 0; i--) {
       const pu = this.powerups[i];
       pu.update(CANVAS_HEIGHT);
@@ -445,6 +474,18 @@ class Game {
       this.paddle.render(ctx);
       for (const ball of this.balls) ball.render(ctx);
       this.particles.render(ctx);
+
+      // Launch hint if ball is attached to paddle
+      if (this.balls.some(b => b.isAttached)) {
+        ctx.save();
+        ctx.fillStyle = '#fde047';
+        ctx.font = 'bold 18px "Courier New", monospace';
+        ctx.textAlign = 'center';
+        ctx.shadowColor = '#f59e0b';
+        ctx.shadowBlur = 10;
+        ctx.fillText('PRESS SPACE OR CLICK TO LAUNCH BALL 🚀', this.paddle.x + this.paddle.w / 2, this.paddle.y - 35);
+        ctx.restore();
+      }
 
       ctx.restore();
       this.renderHUD();
@@ -576,7 +617,14 @@ class Game {
         this.keys.right = true;
       } else if (e.key === ' ' || e.key === 'Spacebar') {
         if (this.state === GAME_STATES.PLAYING) {
-          this.paddle.fire(sounds);
+          // Launch attached balls or fire laser
+          const attached = this.balls.filter(b => b.isAttached);
+          if (attached.length > 0) {
+            attached.forEach(b => b.launch(this.paddle.dx));
+            sounds.playTone(480, 0.1, 'triangle', 680);
+          } else if (this.paddle.canShoot) {
+            this.paddle.fire(sounds);
+          }
         } else if (this.state === GAME_STATES.GAMEOVER || this.state === GAME_STATES.VICTORY) {
           this.startLevel(1);
         }
@@ -632,7 +680,14 @@ class Game {
           }
         }
       } else if (this.state === GAME_STATES.PLAYING) {
-        this.paddle.fire(sounds);
+        // Launch ball or shoot
+        const attached = this.balls.filter(b => b.isAttached);
+        if (attached.length > 0) {
+          attached.forEach(b => b.launch(this.paddle.dx));
+          sounds.playTone(480, 0.1, 'triangle', 680);
+        } else if (this.paddle.canShoot) {
+          this.paddle.fire(sounds);
+        }
       } else if (this.state === GAME_STATES.PAUSE) {
         this.state = GAME_STATES.PLAYING;
       } else if (this.state === GAME_STATES.GAMEOVER || this.state === GAME_STATES.VICTORY) {
