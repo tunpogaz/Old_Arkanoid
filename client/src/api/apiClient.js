@@ -5,6 +5,7 @@ class ApiClient {
   constructor() {
     this.token = localStorage.getItem('arkanoid_token') || null;
     this.username = localStorage.getItem('arkanoid_user') || null;
+    this.profile = null;
   }
 
   isLoggedIn() {
@@ -25,6 +26,7 @@ class ApiClient {
   logout() {
     this.token = null;
     this.username = null;
+    this.profile = null;
     localStorage.removeItem('arkanoid_token');
     localStorage.removeItem('arkanoid_user');
   }
@@ -79,6 +81,41 @@ class ApiClient {
       return await res.json();
     } catch (e) {
       console.warn("Failed to submit score:", e);
+      return null;
+    }
+  }
+
+  async getProfile() {
+    if (!this.token) return null;
+    try {
+      const res = await fetch(`${API_BASE}/user/profile`, {
+        headers: { 'Authorization': `Bearer ${this.token}` }
+      });
+      if (!res.ok) return null;
+      this.profile = await res.json();
+      return this.profile;
+    } catch (e) {
+      console.warn("Failed to fetch profile:", e);
+      return null;
+    }
+  }
+
+  async updateProgress(level) {
+    if (!this.token) return null;
+    try {
+      const res = await fetch(`${API_BASE}/user/progress`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.token}`
+        },
+        body: JSON.stringify({ level })
+      });
+      if (!res.ok) return null;
+      this.profile = await res.json();
+      return this.profile;
+    } catch (e) {
+      console.warn("Failed to update progress:", e);
       return null;
     }
   }

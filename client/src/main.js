@@ -28,6 +28,7 @@ class Game {
 
     this.state = GAME_STATES.MENU;
     this.currentLevel = 1;
+    this.unlockedLevel = 1; // Unlocked progression
     this.score = 0;
     this.combo = 0;
     this.maxCombo = 0;
@@ -51,10 +52,32 @@ class Game {
     this.preloadBackgrounds();
 
     this.initInputs();
-    this.updateUserUI();
     this.initDOMEvents();
+    this.syncProfile();
 
     requestAnimationFrame(this.loop.bind(this));
+  }
+
+  async syncProfile() {
+    if (api.isLoggedIn()) {
+      const p = await api.getProfile();
+      if (p && p.highestLevelUnlocked) {
+        this.unlockedLevel = Math.max(1, p.highestLevelUnlocked);
+      }
+    } else {
+      this.unlockedLevel = parseInt(localStorage.getItem('arkanoid_local_unlocked') || '1', 10);
+    }
+    this.updateUserUI();
+  }
+
+  showToast(msg, type = 'info') {
+    const toast = document.getElementById('toast');
+    if (!toast) return;
+    toast.textContent = msg;
+    toast.className = `toast show ${type}`;
+    setTimeout(() => {
+      toast.className = 'toast';
+    }, 3200);
   }
 
   preloadBackgrounds() {
@@ -72,16 +95,18 @@ class Game {
   }
 
   startLevel(level) {
+    if (level > this.unlockedLevel) {
+      this.showToast(`🔒 Level ${level} is locked! Clear previous levels first.`, 'error');
+      return;
+    }
     this.currentLevel = level;
     this.paddle.reset();
     this.paddle.lives = 3;
 
-    // Initialize ball on top of paddle
     this.balls = [new Ball(this.paddle.x + this.paddle.w / 2, this.paddle.y - 12)];
     this.powerups = [];
     this.combo = 0;
 
-    // Load map bricks
     this.loadMap(this.currentLevel);
 
     this.state = GAME_STATES.PLAYING;
@@ -110,15 +135,29 @@ class Game {
     }
   }
 
-  nextLevel() {
+  async nextLevel() {
     if (this.currentLevel >= 20) {
       this.state = GAME_STATES.VICTORY;
       sounds.stopBgm();
       sounds.playVictory();
-      api.submitScore(this.score, this.currentLevel, this.maxCombo);
+      this.showToast('🏆 CONGRATULATIONS! You completed all 20 levels!', 'success');
+      if (api.isLoggedIn()) {
+        await api.submitScore(this.score, this.currentLevel, this.maxCombo);
+      }
       return;
     }
+
     this.currentLevel++;
+    if (this.currentLevel > this.unlockedLevel) {
+      this.unlockedLevel = this.currentLevel;
+      if (api.isLoggedIn()) {
+        await api.updateProgress(this.unlockedLevel);
+      } else {
+        localStorage.setItem('arkanoid_local_unlocked', this.unlockedLevel.toString());
+      }
+      this.showToast(`🌟 Level ${this.currentLevel} Unlocked!`, 'success');
+    }
+
     this.paddle.reset();
     this.balls = [new Ball(this.paddle.x + this.paddle.w / 2, this.paddle.y - 12)];
     this.powerups = [];
@@ -127,7 +166,7 @@ class Game {
     this.particles.addFloatingText(`LEVEL ${this.currentLevel}!`, CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2, '#38bdf8');
   }
 
-  handleBallLost(ball) {
+  async handleBallLost(ball) {
     const idx = this.balls.indexOf(ball);
     if (idx !== -1) this.balls.splice(idx, 1);
 
@@ -141,9 +180,13 @@ class Game {
         this.state = GAME_STATES.GAMEOVER;
         sounds.stopBgm();
         sounds.playTone(180, 0.4, 'sawtooth', 60);
-        api.submitScore(this.score, this.currentLevel, this.maxCombo);
+        if (api.isLoggedIn()) {
+          const res = await api.submitScore(this.score, this.currentLevel, this.maxCombo);
+          if (res) {
+            this.showToast(`📊 Score ${this.score} recorded to Cloud!`, 'info');
+          }
+        }
       } else {
-        // Respawn single ball
         this.balls = [new Ball(this.paddle.x + this.paddle.w / 2, this.paddle.y - 12)];
       }
     }
@@ -229,16 +272,13 @@ class Game {
     if (this.state !== GAME_STATES.PLAYING) return;
     this.frameCount++;
 
-    // Paddle update
     this.paddle.update(sounds);
 
-    // Combo timer
     if (this.comboTimer > 0) {
       this.comboTimer--;
       if (this.comboTimer <= 0) this.combo = 0;
     }
 
-    // Moving Bricks (horizontal shift & descend like original game)
     if (this.currentLevel >= 4 && this.frameCount % 24 === 0) {
       const shift = Math.sin(this.frameCount * 0.05) * 1.5;
       for (const b of this.bricks) {
@@ -258,12 +298,10 @@ class Game {
       }
     }
 
-    // Balls update
     for (let i = this.balls.length - 1; i >= 0; i--) {
       const ball = this.balls[i];
       const hitPaddle = ball.update(this.bounds, this.paddle, sounds, this.particles);
       if (hitPaddle) {
-        // Combo breaks when ball returns to paddle
         this.combo = 0;
       }
 
@@ -272,7 +310,6 @@ class Game {
         continue;
       }
 
-      // Check Ball vs Bricks
       for (const brick of this.bricks) {
         if (brick.destroyed) continue;
         if (brick.checkCollision(ball)) {
@@ -300,12 +337,11 @@ class Game {
             const pu = brick.spawnPowerUp();
             if (pu) this.powerups.push(pu);
           }
-          break; // Avoid multi-collision in single frame
+          break;
         }
       }
     }
 
-    // Bullets vs Bricks
     for (const bullet of this.paddle.bullets) {
       for (const brick of this.bricks) {
         if (!brick.destroyed && brick.checkBulletCollision(bullet)) {
@@ -321,7 +357,6 @@ class Game {
       }
     }
 
-    // Powerups update
     for (let i = this.powerups.length - 1; i >= 0; i--) {
       const pu = this.powerups[i];
       pu.update(CANVAS_HEIGHT);
@@ -334,10 +369,8 @@ class Game {
       }
     }
 
-    // Particles update
     this.particles.update();
 
-    // Check Win Level (all non-immortal destroyed)
     const remainingBreakable = this.bricks.filter(b => !b.destroyed && !b.isImmortal()).length;
     if (remainingBreakable === 0) {
       this.nextLevel();
@@ -350,18 +383,15 @@ class Game {
     ctx.fillStyle = 'rgba(15, 23, 42, 0.75)';
     ctx.fillRect(0, 0, CANVAS_WIDTH, 50);
 
-    // Score
     ctx.fillStyle = '#f8fafc';
     ctx.font = 'bold 20px "Courier New", monospace';
     ctx.textAlign = 'left';
     ctx.fillText(`SCORE: ${this.score}`, 35, 32);
 
-    // Level
     ctx.fillStyle = '#38bdf8';
     ctx.textAlign = 'center';
     ctx.fillText(`LEVEL ${this.currentLevel} / 20`, CANVAS_WIDTH / 2, 32);
 
-    // Lives (Hearts)
     ctx.textAlign = 'right';
     let hearts = '';
     for (let i = 0; i < Math.min(5, this.paddle.lives); i++) hearts += '❤️ ';
@@ -369,7 +399,6 @@ class Game {
     ctx.fillStyle = '#f43f5e';
     ctx.fillText(`LIVES: ${hearts}`, CANVAS_WIDTH - 35, 32);
 
-    // Combo streak
     if (this.combo >= 2) {
       ctx.fillStyle = '#ec4899';
       ctx.font = 'bold 16px "Courier New", monospace';
@@ -383,7 +412,6 @@ class Game {
     const ctx = this.ctx;
     ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
-    // Background Image
     const bg = this.getBackground();
     if (bg && bg.complete && bg.naturalWidth > 0) {
       ctx.drawImage(bg, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
@@ -392,7 +420,6 @@ class Game {
       ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
     }
 
-    // Playfield bounds border
     ctx.save();
     this.particles.applyShake(ctx);
 
@@ -403,21 +430,10 @@ class Game {
     ctx.strokeRect(this.bounds.x, this.bounds.y, this.bounds.w, this.bounds.h);
 
     if (this.state === GAME_STATES.PLAYING || this.state === GAME_STATES.PAUSE) {
-      // Bricks
-      for (const b of this.bricks) {
-        b.render(ctx);
-      }
-      // Powerups
-      for (const p of this.powerups) {
-        p.render(ctx);
-      }
-      // Paddle
+      for (const b of this.bricks) b.render(ctx);
+      for (const p of this.powerups) p.render(ctx);
       this.paddle.render(ctx);
-      // Balls
-      for (const ball of this.balls) {
-        ball.render(ctx);
-      }
-      // Particles
+      for (const ball of this.balls) ball.render(ctx);
       this.particles.render(ctx);
 
       ctx.restore();
@@ -428,7 +444,7 @@ class Game {
       }
     } else if (this.state === GAME_STATES.GAMEOVER) {
       ctx.restore();
-      this.renderOverlay('GAME OVER', `Final Score: ${this.score} | Press SPACE or Click to Retry`, '#ef4444');
+      this.renderOverlay('GAME OVER', `Final Score: ${this.score} | Click to Restart`, '#ef4444');
     } else if (this.state === GAME_STATES.VICTORY) {
       ctx.restore();
       this.renderOverlay('VICTORY!', `Congratulations! Master Score: ${this.score}`, '#eab308');
@@ -458,7 +474,6 @@ class Game {
     ctx.fillStyle = '#94a3b8';
     ctx.fillText('Online Web & Database Edition', CANVAS_WIDTH / 2, 270);
 
-    // Menu Buttons
     this.drawButton(CANVAS_WIDTH / 2 - 130, 340, 260, 55, 'START GAME', '#10b981');
     this.drawButton(CANVAS_WIDTH / 2 - 130, 415, 260, 55, 'SELECT LEVEL', '#3b82f6');
     this.drawButton(CANVAS_WIDTH / 2 - 130, 490, 260, 55, 'LEADERBOARD', '#eab308');
@@ -467,15 +482,15 @@ class Game {
     ctx.restore();
   }
 
-  drawButton(x, y, w, h, text, color) {
+  drawButton(x, y, w, h, text, color, isLocked = false) {
     const ctx = this.ctx;
     ctx.save();
-    ctx.fillStyle = color;
+    ctx.fillStyle = isLocked ? '#334155' : color;
     ctx.beginPath();
     ctx.roundRect(x, y, w, h, 10);
     ctx.fill();
-    ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 20px "Courier New", monospace';
+    ctx.fillStyle = isLocked ? '#64748b' : '#ffffff';
+    ctx.font = 'bold 18px "Courier New", monospace';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(text, x + w / 2, y + h / 2);
@@ -489,12 +504,12 @@ class Game {
     ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
     ctx.fillStyle = '#38bdf8';
-    ctx.font = 'bold 42px "Courier New", monospace';
+    ctx.font = 'bold 36px "Courier New", monospace';
     ctx.textAlign = 'center';
-    ctx.fillText('SELECT LEVEL (1 - 20)', CANVAS_WIDTH / 2, 110);
+    ctx.fillText(`SELECT LEVEL (Unlocked: ${this.unlockedLevel} / 20)`, CANVAS_WIDTH / 2, 100);
 
     const startX = 170;
-    const startY = 160;
+    const startY = 150;
     const btnW = 140;
     const btnH = 65;
     const gapX = 35;
@@ -506,7 +521,10 @@ class Game {
       const bx = startX + col * (btnW + gapX);
       const by = startY + row * (btnH + gapY);
 
-      this.drawButton(bx, by, btnW, btnH, `LEVEL ${i}`, '#0284c7');
+      const isLocked = i > this.unlockedLevel;
+      const btnText = isLocked ? `🔒 LVL ${i}` : `LEVEL ${i}`;
+      const color = isLocked ? '#334155' : '#0284c7';
+      this.drawButton(bx, by, btnW, btnH, btnText, color, isLocked);
     }
 
     this.drawButton(CANVAS_WIDTH / 2 - 100, 600, 200, 50, 'BACK TO MENU', '#64748b');
@@ -564,7 +582,6 @@ class Game {
       }
     });
 
-    // Mouse movement
     this.canvas.addEventListener('mousemove', e => {
       if (this.state === GAME_STATES.PLAYING) {
         const rect = this.canvas.getBoundingClientRect();
@@ -574,7 +591,6 @@ class Game {
       }
     });
 
-    // Mouse click handling
     this.canvas.addEventListener('click', e => {
       sounds.init();
       const rect = this.canvas.getBoundingClientRect();
@@ -596,7 +612,7 @@ class Game {
           return;
         }
         const startX = 170;
-        const startY = 160;
+        const startY = 150;
         const btnW = 140;
         const btnH = 65;
         const gapX = 35;
@@ -627,11 +643,40 @@ class Game {
     const authBtn = document.getElementById('authBtn');
     if (api.isLoggedIn()) {
       userDisplay.textContent = `👤 ${api.getUser()}`;
+      userDisplay.className = 'user-badge clickable';
       authBtn.textContent = 'Logout';
     } else {
       userDisplay.textContent = '👤 Guest (Offline)';
+      userDisplay.className = 'user-badge';
       authBtn.textContent = 'Login / Register';
     }
+  }
+
+  async openProfile() {
+    if (!api.isLoggedIn()) {
+      document.getElementById('authModal').classList.remove('hidden');
+      return;
+    }
+    const modal = document.getElementById('profileModal');
+    const body = document.getElementById('profileBody');
+    body.innerHTML = '<div class="loading">Loading cloud stats...</div>';
+    modal.classList.remove('hidden');
+
+    const p = await api.getProfile();
+    if (!p) {
+      body.innerHTML = '<div class="empty">Unable to fetch profile stats.</div>';
+      return;
+    }
+
+    body.innerHTML = `
+      <div class="profile-card">
+        <div class="stat-row"><span>Player:</span><strong>${p.username}</strong></div>
+        <div class="stat-row"><span>Global Rank:</span><strong class="gold">${p.globalRank > 0 ? '#' + p.globalRank : 'Unranked'}</strong></div>
+        <div class="stat-row"><span>Personal Best:</span><strong class="gold">${p.personalBestScore.toLocaleString()} pts</strong></div>
+        <div class="stat-row"><span>Max Level Unlocked:</span><strong>Level ${p.highestLevelUnlocked} / 20</strong></div>
+        <div class="stat-row"><span>Matches Played:</span><strong>${p.totalGamesPlayed}</strong></div>
+      </div>
+    `;
   }
 
   async openLeaderboard() {
@@ -666,10 +711,16 @@ class Game {
   }
 
   initDOMEvents() {
+    document.getElementById('userDisplay').addEventListener('click', () => {
+      this.openProfile();
+    });
+
     document.getElementById('authBtn').addEventListener('click', () => {
       if (api.isLoggedIn()) {
         api.logout();
         this.updateUserUI();
+        this.syncProfile();
+        this.showToast('Logged out successfully.', 'info');
       } else {
         document.getElementById('authModal').classList.remove('hidden');
       }
@@ -692,11 +743,13 @@ class Game {
       try {
         if (isReg) {
           await api.register(u, p);
+          this.showToast(`Welcome ${u}! Account created.`, 'success');
         } else {
           await api.login(u, p);
+          this.showToast(`Welcome back, ${u}!`, 'success');
         }
         document.getElementById('authModal').classList.add('hidden');
-        this.updateUserUI();
+        await this.syncProfile();
       } catch (err) {
         errEl.textContent = err.message || 'Authentication failed';
       }

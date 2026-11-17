@@ -10,7 +10,7 @@
   <header>
     <div class="logo">⚡ ARKANOID ONLINE</div>
     <div class="user-panel">
-      <span id="userDisplay">👤 Guest (Offline)</span>
+      <span id="userDisplay" class="user-badge" title="Click to view player stats">👤 Guest (Offline)</span>
       <button id="muteBtn" class="btn btn-secondary">🔊 Sound</button>
       <button id="authBtn" class="btn">Login / Register</button>
     </div>
@@ -19,6 +19,18 @@
   <main class="game-container">
     <canvas id="gameCanvas"></canvas>
   </main>
+
+  <!-- Toast Notification Container -->
+  <div id="toast" class="toast"></div>
+
+  <!-- Player Profile Modal -->
+  <div id="profileModal" class="modal hidden">
+    <div class="modal-content">
+      <button class="close-modal">&times;</button>
+      <h2>PLAYER PROFILE</h2>
+      <div id="profileBody"></div>
+    </div>
+  </div>
 
   <!-- Auth Modal -->
   <div id="authModal" class="modal hidden">

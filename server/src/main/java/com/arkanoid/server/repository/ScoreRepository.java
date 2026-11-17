@@ -21,4 +21,9 @@ public interface ScoreRepository extends JpaRepository<Score, Long> {
     List<Score> findByUserOrderByScoreDesc(User user);
     
     Optional<Score> findFirstByUserOrderByScoreDesc(User user);
+
+    long countByUser(User user);
+
+    @Query("SELECT COUNT(s) + 1 FROM Score s WHERE s.score > (SELECT COALESCE(MAX(s2.score), 0) FROM Score s2 WHERE s2.user = :user)")
+    int findUserGlobalRank(User user);
 }

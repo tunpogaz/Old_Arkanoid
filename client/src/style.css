@@ -43,6 +43,27 @@ header {
   gap: 14px;
 }
 
+.user-badge {
+  font-size: 14px;
+  font-weight: 600;
+  color: #94a3b8;
+  padding: 6px 12px;
+  border-radius: 6px;
+  background: #1e293b;
+  border: 1px solid #334155;
+  transition: all 0.2s ease;
+}
+
+.user-badge.clickable {
+  color: #38bdf8;
+  border-color: rgba(56, 189, 248, 0.4);
+  cursor: pointer;
+}
+.user-badge.clickable:hover {
+  background: #0369a122;
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.3);
+}
+
 .btn {
   background: #0284c7;
   color: #ffffff;
@@ -223,4 +244,74 @@ td.gold {
 .tutorial-body ul {
   margin-left: 20px;
   margin-top: 10px;
+}
+
+/* Profile Modal Cards */
+.profile-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: #1e293b;
+  padding: 20px;
+  border-radius: 10px;
+  border: 1px solid #334155;
+}
+
+.stat-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 15px;
+  color: #cbd5e1;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #33415588;
+}
+
+.stat-row:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.stat-row strong {
+  color: #f8fafc;
+  font-size: 16px;
+}
+
+.stat-row strong.gold {
+  color: #fbbf24;
+}
+
+/* Toast Notifications */
+.toast {
+  position: fixed;
+  bottom: 30px;
+  left: 50%;
+  transform: translateX(-50%) translateY(100px);
+  background: #1e293b;
+  color: #f8fafc;
+  padding: 12px 24px;
+  border-radius: 30px;
+  font-size: 15px;
+  font-weight: 600;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8), 0 0 15px rgba(56, 189, 248, 0.4);
+  border: 1px solid rgba(56, 189, 248, 0.4);
+  z-index: 1000;
+  opacity: 0;
+  pointer-events: none;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.toast.show {
+  transform: translateX(-50%) translateY(0);
+  opacity: 1;
+}
+
+.toast.success {
+  border-color: #10b981;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8), 0 0 15px rgba(16, 185, 129, 0.4);
+}
+
+.toast.error {
+  border-color: #ef4444;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8), 0 0 15px rgba(239, 68, 68, 0.4);
 }
