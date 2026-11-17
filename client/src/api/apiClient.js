@@ -1,7 +1,8 @@
 // REST API Client for Arkanoid Spring Boot Backend
 // Automatically adapts to Cloud environment variable VITE_API_URL or defaults to localhost
-const rawApiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8080/api';
-const API_BASE = rawApiUrl.endsWith('/api') ? rawApiUrl : `${rawApiUrl.replace(/\/$/, '')}/api`;
+import { normalizeApiUrl } from '../systems/GameRules.js';
+
+const API_BASE = normalizeApiUrl(import.meta.env.VITE_API_URL);
 
 class ApiClient {
   constructor() {

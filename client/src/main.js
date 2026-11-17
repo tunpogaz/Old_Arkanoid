@@ -6,9 +6,23 @@ import { getMapByLevel } from './systems/MapData.js';
 import { sounds } from './systems/SoundManager.js';
 import { ParticleSystem } from './systems/ParticleSystem.js';
 import { api } from './api/apiClient.js';
-
-const CANVAS_WIDTH = 1200;
-const CANVAS_HEIGHT = 750;
+import {
+  CANVAS_WIDTH,
+  CANVAS_HEIGHT,
+  INITIAL_LIVES,
+  MAX_RETRIES,
+  MAX_BALLS,
+  SURVIVAL_WAVE_INTERVAL,
+  SURVIVAL_WAVE_MIN_INTERVAL,
+  SURVIVAL_DESCENT_STEP,
+  DANGER_LINE_Y,
+  DANGER_ALERT_MARGIN,
+  computeMultiBallSpawns,
+  resolveAttemptFailure,
+  isDangerBreach,
+  isDangerAlert,
+  collectBlastTargets
+} from './systems/GameRules.js';
 
 export const GAME_MODES = {
   CAMPAIGN: 'CAMPAIGN',
@@ -51,17 +65,17 @@ class Game {
     this.frameCount = 0;
     this.keys = { left: false, right: false };
 
-    // 3 Continues / Retries System
-    this.retriesLeft = 3;
-    this.maxRetries = 3;
+    // 3 Attempts / Continues System
+    this.retriesLeft = MAX_RETRIES;
+    this.maxRetries = MAX_RETRIES;
     this.showDebugPanel = false;
 
     // Survival Mode Attributes
     this.survivalTime = 0;
     this.survivalWave = 1;
     this.survivalWaveTimer = 0;
-    this.survivalWaveInterval = 540; // 9 seconds
-    this.dangerLineY = CANVAS_HEIGHT - 130;
+    this.survivalWaveInterval = SURVIVAL_WAVE_INTERVAL;
+    this.dangerLineY = DANGER_LINE_Y;
     this.dangerAlert = false;
 
     this.paddle = new Paddle(CANVAS_WIDTH, CANVAS_HEIGHT);
@@ -141,7 +155,7 @@ class Game {
     this.mode = GAME_MODES.CAMPAIGN;
     this.currentLevel = level;
     this.paddle.reset();
-    this.paddle.lives = 3;
+    this.paddle.lives = INITIAL_LIVES;
 
     // Ball starts attached to paddle until launched
     this.balls = [new Ball(this.paddle.x + this.paddle.w / 2, this.paddle.y - 14, true)];
@@ -156,27 +170,27 @@ class Game {
 
   retryCurrentLevel() {
     this.paddle.reset();
-    this.paddle.lives = 3;
+    this.paddle.lives = INITIAL_LIVES;
     this.balls = [new Ball(this.paddle.x + this.paddle.w / 2, this.paddle.y - 14, true)];
     this.powerups = [];
     this.combo = 0;
     this.loadMap(this.currentLevel);
     this.state = GAME_STATES.PLAYING;
     sounds.playBgm(this.currentLevel);
-    this.particles.addFloatingText(`CONTINUE #${this.maxRetries - this.retriesLeft + 1}!`, CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2, '#38bdf8');
+    this.particles.addFloatingText(`CONTINUE #${this.maxRetries - this.retriesLeft}!`, CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2, '#38bdf8');
   }
 
   startSurvivalMode() {
     this.mode = GAME_MODES.SURVIVAL;
     this.paddle.reset();
-    this.paddle.lives = 3;
+    this.paddle.lives = INITIAL_LIVES;
     this.score = 0;
     this.combo = 0;
     this.maxCombo = 0;
     this.survivalTime = 0;
     this.survivalWave = 1;
     this.survivalWaveTimer = 0;
-    this.survivalWaveInterval = 540; // 9 seconds
+    this.survivalWaveInterval = SURVIVAL_WAVE_INTERVAL;
     this.dangerAlert = false;
 
     this.balls = [new Ball(this.paddle.x + this.paddle.w / 2, this.paddle.y - 14, true)];
@@ -314,14 +328,15 @@ class Game {
             await api.submitScore(this.score, this.survivalWave, this.maxCombo);
           }
         } else {
-          // 3-Retries System in Campaign Mode
-          if (this.retriesLeft > 1) {
-            this.retriesLeft--;
+          // 3-Attempts / Continues System in Campaign Mode
+          const transition = resolveAttemptFailure(this.retriesLeft, this.maxRetries);
+          this.retriesLeft = transition.retriesLeft;
+
+          if (transition.state === 'RETRY') {
             this.state = GAME_STATES.RETRY;
             sounds.stopBgm();
             sounds.playTone(220, 0.3, 'sawtooth', 120);
           } else {
-            this.retriesLeft = 0;
             this.state = GAME_STATES.GAMEOVER;
             sounds.stopBgm();
             sounds.playTone(180, 0.4, 'sawtooth', 60);
@@ -376,28 +391,33 @@ class Game {
   triggerAreaBlast(centerBrick) {
     sounds.playExplosion();
     this.particles.triggerScreenShake(14);
-    this.particles.addFloatingText('BOOM! 💥', centerBrick.x + centerBrick.w / 2, centerBrick.y - 10, '#f97316');
 
-    const blastRadius = 150;
-    const toChain = [];
+    // Real Domino chain: every bomb caught in the blast becomes a new blast source,
+    // so the explosion propagates across the whole connected cluster exactly once.
+    const targets = collectBlastTargets(this.bricks, centerBrick);
+    const chainBombs = [];
 
-    for (const b of this.bricks) {
-      if (b.destroyed || b === centerBrick || b.isImmortal()) continue;
-      const dist = Math.hypot(b.x - centerBrick.x, b.y - centerBrick.y);
-      if (dist <= blastRadius) {
-        b.destroyed = true;
-        this.score += b.points;
-        this.particles.createBrickExplosion(b.x, b.y, b.w, b.h, b.getColor());
-        const pu = b.spawnPowerUp();
-        if (pu) this.powerups.push(pu);
+    for (const b of targets) {
+      b.destroyed = true;
+      this.score += b.points;
+      this.particles.createBrickExplosion(b.x, b.y, b.w, b.h, b.getColor());
+      const pu = b.spawnPowerUp();
+      if (pu) this.powerups.push(pu);
 
-        if (b.type === BRICK_TYPES.AREA_BLAST || b.type === BRICK_TYPES.FALL_BOMB) {
-          toChain.push(b);
-        }
+      if (b.type === BRICK_TYPES.AREA_BLAST || b.type === BRICK_TYPES.FALL_BOMB) {
+        chainBombs.push(b);
       }
     }
 
-    for (const cb of toChain) {
+    const chainLabel = targets.length > 0 ? `DOMINO x${targets.length + 1}! 💥` : 'BOOM! 💥';
+    this.particles.addFloatingText(
+      chainLabel,
+      centerBrick.x + centerBrick.w / 2,
+      centerBrick.y - 10,
+      '#f97316'
+    );
+
+    for (const cb of chainBombs) {
       setTimeout(() => {
         sounds.playExplosion();
         this.particles.createBrickExplosion(cb.x, cb.y, cb.w, cb.h, '#ef4444');
@@ -408,14 +428,18 @@ class Game {
   triggerFallBoom() {
     sounds.playExplosion();
     this.particles.triggerScreenShake(16);
-    let count = 0;
-    for (const b of this.bricks) {
-      if (!b.destroyed && !b.isImmortal() && count < 8) {
-        b.destroyed = true;
-        this.score += b.points;
-        this.particles.createBrickExplosion(b.x, b.y, b.w, b.h, b.getColor());
-        count++;
-      }
+
+    // Pick up to 8 random surviving breakable bricks (as documented for QA/TC14).
+    const candidates = this.bricks.filter(b => !b.destroyed && !b.isImmortal());
+    for (let i = candidates.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
+    }
+
+    for (const b of candidates.slice(0, 8)) {
+      b.destroyed = true;
+      this.score += b.points;
+      this.particles.createBrickExplosion(b.x, b.y, b.w, b.h, b.getColor());
     }
   }
 
@@ -430,35 +454,18 @@ class Game {
         this.paddle.setLength('SHORTEN');
         this.particles.addFloatingText('SHORT PADDLE!', this.paddle.x + this.paddle.w / 2, this.paddle.y - 20, '#f87171');
         break;
-      case POWERUP_TYPES.DUPLICATE:
-        const currentCount = this.balls.length;
-        const maxAllowedBalls = 18;
-        for (let i = 0; i < currentCount; i++) {
-          if (this.balls.length >= maxAllowedBalls) break;
-          const b = this.balls[i];
-          const speed = Math.hypot(b.dx, b.dy) || b.baseSpeed;
-          const currentAngle = Math.atan2(b.dx, -b.dy);
-
-          // Ball 2: Fan out left by 25 degrees
-          const angleLeft = currentAngle - 0.44;
-          const b2 = new Ball(b.x, b.y, false);
-          b2.dx = speed * Math.sin(angleLeft);
-          b2.dy = -speed * Math.cos(angleLeft);
-          if (b.isBigger) b2.setBigger();
-          this.balls.push(b2);
-
-          // Ball 3: Fan out right by 25 degrees
-          if (this.balls.length < maxAllowedBalls) {
-            const angleRight = currentAngle + 0.44;
-            const b3 = new Ball(b.x, b.y, false);
-            b3.dx = speed * Math.sin(angleRight);
-            b3.dy = -speed * Math.cos(angleRight);
-            if (b.isBigger) b3.setBigger();
-            this.balls.push(b3);
-          }
+      case POWERUP_TYPES.DUPLICATE: {
+        const spawns = computeMultiBallSpawns(this.balls, MAX_BALLS);
+        for (const spec of spawns) {
+          const newBall = new Ball(spec.x, spec.y, false);
+          newBall.dx = spec.dx;
+          newBall.dy = spec.dy;
+          if (spec.isBigger) newBall.setBigger();
+          this.balls.push(newBall);
         }
         this.particles.addFloatingText('x3 MULTI BALL!', this.paddle.x + this.paddle.w / 2, this.paddle.y - 20, '#a855f7');
         break;
+      }
       case POWERUP_TYPES.BIGGER_BALL:
         this.balls.forEach(b => b.setBigger());
         this.particles.addFloatingText('MEGA BALL!', this.paddle.x + this.paddle.w / 2, this.paddle.y - 20, '#fbbf24');
@@ -510,18 +517,21 @@ class Game {
       if (this.survivalWaveTimer >= this.survivalWaveInterval) {
         this.survivalWaveTimer = 0;
         this.survivalWave++;
-        this.survivalWaveInterval = Math.max(300, 540 - this.survivalWave * 15);
+        this.survivalWaveInterval = Math.max(
+          SURVIVAL_WAVE_MIN_INTERVAL,
+          SURVIVAL_WAVE_INTERVAL - this.survivalWave * 15
+        );
 
         // Push existing bricks down
         for (const b of this.bricks) {
           if (!b.destroyed) {
-            b.y += 42;
+            b.y += SURVIVAL_DESCENT_STEP;
           }
         }
 
         // Check Danger Line breach
         for (const b of this.bricks) {
-          if (!b.destroyed && b.y + b.h >= this.dangerLineY) {
+          if (isDangerBreach(b, this.dangerLineY)) {
             this.triggerSurvivalBreach();
             return;
           }
@@ -537,7 +547,9 @@ class Game {
       }
 
       // Check alert distance
-      this.dangerAlert = this.bricks.some(b => !b.destroyed && b.y + b.h >= this.dangerLineY - 55);
+      this.dangerAlert = this.bricks.some(b =>
+        isDangerAlert(b, this.dangerLineY, DANGER_ALERT_MARGIN)
+      );
     } else {
       // CAMPAIGN MODE: Dynamic Bricks on higher levels
       if (this.currentLevel >= 4 && this.frameCount % 24 === 0) {
@@ -1010,6 +1022,13 @@ class Game {
   initInputs() {
     window.addEventListener('keydown', e => {
       sounds.init();
+
+      // Never let gameplay hotkeys interfere with typing in the auth modal.
+      const tagName = e.target && e.target.tagName;
+      if (tagName === 'INPUT' || tagName === 'TEXTAREA' || tagName === 'SELECT' || (e.target && e.target.isContentEditable)) {
+        return;
+      }
+
       if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') {
         this.keys.left = true;
       } else if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') {
@@ -1036,7 +1055,7 @@ class Game {
         if (this.state === GAME_STATES.PLAYING) this.state = GAME_STATES.PAUSE;
         else if (this.state === GAME_STATES.PAUSE) this.state = GAME_STATES.PLAYING;
       } else if (e.key === 'm' || e.key === 'M' || e.key === 'Escape') {
-        if (this.state === GAME_STATES.RETRY || this.state === GAME_STATES.GAMEOVER || this.state === GAME_STATES.VICTORY || this.state === GAME_STATES.PAUSE) {
+        if (this.state !== GAME_STATES.MENU) {
           this.state = GAME_STATES.MENU;
           sounds.stopBgm();
         }

@@ -13,7 +13,7 @@ Dự án trò chơi Arkanoid phiên bản trực tuyến hiện đại, kết h�
 ### 1. Chế Độ Chơi Đa Dạng
 - **Campaign Mode:** Chuỗi 20 màn chơi thiết kế thủ công với độ khó tăng dần. Màn 1 kích hoạt hiệu ứng nổ dây chuyền Domino hoành tráng khi đánh trúng bom trung tâm. Các màn tiếp theo xuất hiện gạch di chuyển, hàng rào kim cương và phòng trùm cuối.
 - **Survival Mode:** Chế độ sinh tồn vô tận. Các hàng gạch liên tục tiến xuống theo từng đợt sóng. Người chơi phải bảo vệ vạch laser đỏ Danger Line, nếu gạch chạm vạch sẽ thất bại ngay lập tức.
-- **Cơ Chế 3 Lượt Chơi:** Mỗi lượt đi chiến dịch có 3 cơ hội hồi sinh. Khi hết mạng, điểm số vẫn được bảo lưu và người chơi có thể thử lại màn hiện tại tối đa 3 lần.
+- **Cơ Chế 3 Lượt Chơi:** Mỗi lượt chiến dịch có 3 mạng. Khi hết mạng, điểm số được bảo lưu và người chơi có 2 lượt hồi sinh (tổng cộng 3 lần thử màn hiện tại).
 
 ### 2. Vật Phẩm Neon Dạng Viên Nhộng
 Các vật phẩm rơi được tạo hình viên nhộng phát sáng nằm ngang với kích thước 72x24 pixel, gắn nhãn rõ ràng và hoàn toàn khác biệt với quả bóng:
@@ -69,6 +69,12 @@ arkanoid/
 │   ├── src/main/resources/     # Cấu hình cổng mạng và cơ sở dữ liệu
 │   ├── pom.xml                 # Cấu hình thư viện Maven backend
 │   └── Dockerfile              # Đóng gói backend nhiều tầng bằng OpenJDK 17
+├── tests/                      # Toàn bộ tài nguyên kiểm thử QA
+│   ├── TEST_PLAN.md            # 25 ca kiểm thử và tiêu chí nghiệm thu
+│   ├── automated/              # Test client (79 kiểm tra) và smoke test REST API
+│   ├── manual/                 # Checklist QA panel trong game
+│   ├── evidence/               # Ảnh bằng chứng
+│   └── reports/                # Báo cáo kết quả kiểm thử
 ├── src/main/java/              # Mã nguồn phiên bản JavaFX trên máy tính
 ├── docker-compose.yml          # Triển khai trọn bộ backend và frontend cùng lúc
 ├── render.yaml                 # Bản thiết kế tự động đưa lên đám mây Render
@@ -156,16 +162,38 @@ Hệ thống đã tích hợp sẵn tệp cấu hình `render.yaml`. Quá trình
 
 ---
 
+## 🧪 Kiểm Thử
+
+Toàn bộ tài nguyên kiểm thử nằm trong thư mục [`tests/`](tests/).
+
+```bash
+# 79 kiểm tra logic game (client + shared rules)
+cd client && npm test
+
+# 11 test backend Spring Boot
+cd server && mvn test
+
+# Smoke test REST API thật (backend đang chạy)
+bash tests/automated/run-api-smoke.sh http://localhost:8080
+```
+
+Kịch bản 25 ca kiểm thử tay: [`tests/TEST_PLAN.md`](tests/TEST_PLAN.md). Checklist QA panel: [`tests/manual/QA_PANEL_CHECKLIST.md`](tests/manual/QA_PANEL_CHECKLIST.md).
+
+---
+
 ## 📡 Danh Sách Các Cổng Giao Tiếp REST API
 
 | Phương Thức | Đường Dẫn | Chức Năng | Yêu Cầu Xác Thực |
 | :--- | :--- | :--- | :--- |
+| `GET` | `/api/health` | Kiểm tra trạng thái máy chủ | Không |
 | `POST` | `/api/auth/register` | Đăng ký tài khoản người chơi mới | Không |
 | `POST` | `/api/auth/login` | Đăng nhập và nhận chuỗi mã JWT | Không |
-| `GET` | `/api/leaderboard` | Lấy danh sách 10 người chơi có điểm số cao nhất | Không |
-| `POST` | `/api/scores/submit` | Ghi nhận điểm số, màn chơi và chuỗi combo | Có mã JWT |
+| `GET` | `/api/auth/me` | Lấy người dùng hiện tại từ JWT | Có mã JWT |
+| `GET` | `/api/leaderboard` | Top 10 người chơi, mỗi người chỉ lấy điểm cao nhất | Không |
+| `POST` | `/api/scores` | Ghi nhận điểm số, màn chơi và chuỗi combo | Có mã JWT |
+| `GET` | `/api/scores/my-best` | Điểm cao nhất cá nhân | Có mã JWT |
 | `GET` | `/api/user/profile` | Xem thông tin thứ hạng và điểm kỷ lục cá nhân | Có mã JWT |
-| `PUT` | `/api/user/progress` | Cập nhật số màn chơi cao nhất đã mở khóa | Có mã JWT |
+| `POST` | `/api/user/progress` | Cập nhật số màn chơi cao nhất đã mở khóa | Có mã JWT |
 
 ---
 

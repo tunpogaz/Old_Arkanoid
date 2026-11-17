@@ -1,4 +1,5 @@
 import { PowerUp, POWERUP_TYPES } from './PowerUp.js';
+import { shouldDropNormalPowerUp } from '../systems/GameRules.js';
 
 export const BRICK_TYPES = {
   EMPTY: 0,
@@ -89,7 +90,7 @@ export class Brick {
       return new PowerUp(this.x + this.w / 2, this.y + this.h / 2, r);
     }
     // Random chance for normal bricks: tuned down from 16% to 6% for cleaner, balanced gameplay
-    if (Math.random() < 0.06) {
+    if (shouldDropNormalPowerUp(Math.random())) {
       return new PowerUp(this.x + this.w / 2, this.y + this.h / 2);
     }
     return null;
