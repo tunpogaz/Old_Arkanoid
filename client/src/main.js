@@ -69,6 +69,7 @@ class Game {
     this.retriesLeft = MAX_RETRIES;
     this.maxRetries = MAX_RETRIES;
     this.showDebugPanel = false;
+    this._uiState = null;
 
     // Survival Mode Attributes
     this.survivalTime = 0;
@@ -83,6 +84,7 @@ class Game {
     this.bricks = [];
     this.powerups = [];
     this.particles = new ParticleSystem();
+    this.sounds = sounds;
 
     this.bounds = {
       x: 30,
@@ -166,6 +168,7 @@ class Game {
 
     this.state = GAME_STATES.PLAYING;
     sounds.playBgm(this.currentLevel);
+    this.syncStateUI();
   }
 
   retryCurrentLevel() {
@@ -178,6 +181,91 @@ class Game {
     this.state = GAME_STATES.PLAYING;
     sounds.playBgm(this.currentLevel);
     this.particles.addFloatingText(`CONTINUE #${this.maxRetries - this.retriesLeft}!`, CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2, '#38bdf8');
+  }
+
+  openPauseMenu() {
+    if (this.state !== GAME_STATES.PLAYING) return;
+    this.state = GAME_STATES.PAUSE;
+    this.keys.left = false;
+    this.keys.right = false;
+    this.syncStateUI();
+  }
+
+  resumeGame() {
+    if (this.state !== GAME_STATES.PAUSE) return;
+    this.state = GAME_STATES.PLAYING;
+    this.syncStateUI();
+  }
+
+  replayCurrentGame() {
+    this.keys.left = false;
+    this.keys.right = false;
+    if (this.mode === GAME_MODES.SURVIVAL) {
+      this.startSurvivalMode();
+    } else {
+      // Restart the current level while keeping the player's score and lives system intact.
+      this.startLevel(this.currentLevel);
+    }
+    this.syncStateUI();
+  }
+
+  returnToMainMenu() {
+    this.state = GAME_STATES.MENU;
+    this.keys.left = false;
+    this.keys.right = false;
+    sounds.stopBgm();
+    this.syncStateUI();
+  }
+
+  /** Keep the pause button / overlay in sync with the current game state. */
+  syncStateUI() {
+    if (this._uiState !== this.state) {
+      this._uiState = this.state;
+      const pauseBtn = document.getElementById('pauseBtn');
+      const overlay = document.getElementById('pauseOverlay');
+      const inGame = this.state === GAME_STATES.PLAYING || this.state === GAME_STATES.PAUSE;
+
+      if (pauseBtn) {
+        pauseBtn.classList.toggle('hidden', !inGame);
+        const paused = this.state === GAME_STATES.PAUSE;
+        const icon = paused ? '▶' : '⏸';
+        if (pauseBtn.textContent !== icon) pauseBtn.textContent = icon;
+        const label = paused ? 'Resume (P)' : 'Pause (P)';
+        if (pauseBtn.title !== label) pauseBtn.title = label;
+        pauseBtn.setAttribute('aria-label', label);
+      }
+      if (overlay) {
+        overlay.classList.toggle('hidden', this.state !== GAME_STATES.PAUSE);
+      }
+    }
+
+    if (this.state === GAME_STATES.PAUSE) {
+      this.syncVolumeUI();
+    }
+  }
+
+  syncVolumeUI() {
+    const slider = document.getElementById('volumeSlider');
+    const label = document.getElementById('volumeValue');
+    if (!slider || !label) return;
+    const percent = sounds.getVolumePercent();
+    if (slider.value !== String(percent)) slider.value = String(percent);
+    const text = `${percent}%`;
+    if (label.textContent !== text) label.textContent = text;
+    this.syncSoundUI();
+  }
+
+  /** Header speaker button mirrors the master volume (muted or not). */
+  syncSoundUI() {
+    const btn = document.getElementById('soundBtn');
+    if (!btn) return;
+    const muted = sounds.isMuted();
+    const icon = muted ? '🔇' : '🔊';
+    if (btn.textContent !== icon) btn.textContent = icon;
+    const label = muted ? 'Sound off — click to turn on' : 'Sound on — click to mute';
+    if (btn.title !== label) btn.title = label;
+    btn.setAttribute('aria-label', label);
+    btn.setAttribute('aria-pressed', String(muted));
   }
 
   startSurvivalMode() {
@@ -221,6 +309,7 @@ class Game {
 
     this.state = GAME_STATES.PLAYING;
     sounds.playBgm(3);
+    this.syncStateUI();
     this.particles.addFloatingText('SURVIVAL MODE: DEFEND THE LINE!', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2, '#ef4444');
   }
 
@@ -591,7 +680,8 @@ class Game {
           if (brick.destroyed) continue;
           if (brick.checkCollision(ball)) {
             this.hitBrick(brick, false);
-            break;
+            // Mega Ball keeps travelling through destroyed bricks; immortal bricks still bounce it.
+            if (!ball.isBigger || brick.isImmortal()) break;
           }
         }
       }
@@ -690,6 +780,7 @@ class Game {
 
   render() {
     const ctx = this.ctx;
+    this.syncStateUI();
     ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
     const bg = this.getBackground();
@@ -750,10 +841,6 @@ class Game {
 
       ctx.restore();
       this.renderHUD();
-
-      if (this.state === GAME_STATES.PAUSE) {
-        this.renderPauseOverlay();
-      }
     } else if (this.state === GAME_STATES.RETRY) {
       ctx.restore();
       this.renderRetryOverlay();
@@ -805,7 +892,7 @@ class Game {
     ctx.fillText('Phím 3: Thử nghiệm nhân 3 bóng Multi-Ball', px + 15, py + 126);
     ctx.fillText('Phím L: Chuyển màn kế tiếp | Phím K: Xóa sạch gạch', px + 15, py + 147);
     ctx.fillText('Phím G: Trừ mạng để test màn hình Retry', px + 15, py + 168);
-    ctx.fillText('Phím M hoặc ESC: Về Menu | Phím Space: Bắn', px + 15, py + 189);
+    ctx.fillText('Phím P/ESC: Pause menu | M: Về Menu | Space: Bắn', px + 15, py + 189);
     ctx.restore();
   }
 
@@ -993,26 +1080,6 @@ class Game {
     ctx.restore();
   }
 
-  renderPauseOverlay() {
-    const ctx = this.ctx;
-    ctx.save();
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-    ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-
-    ctx.textAlign = 'center';
-    ctx.fillStyle = '#38bdf8';
-    ctx.font = 'bold 56px "Courier New", monospace';
-    ctx.shadowColor = '#0284c7';
-    ctx.shadowBlur = 18;
-    ctx.fillText('PAUSED', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 - 20);
-
-    ctx.font = '20px "Courier New", monospace';
-    ctx.fillStyle = '#f8fafc';
-    ctx.shadowBlur = 0;
-    ctx.fillText('Press P or Click to Resume', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 35);
-    ctx.restore();
-  }
-
   loop() {
     this.update();
     this.render();
@@ -1028,6 +1095,9 @@ class Game {
       if (tagName === 'INPUT' || tagName === 'TEXTAREA' || tagName === 'SELECT' || (e.target && e.target.isContentEditable)) {
         return;
       }
+
+      // Holding a menu key must not toggle the pause state every frame.
+      if (e.repeat && ['p', 'P', 'Escape', 'm', 'M'].includes(e.key)) return;
 
       if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') {
         this.keys.left = true;
@@ -1052,13 +1122,14 @@ class Game {
           }
         }
       } else if (e.key === 'p' || e.key === 'P') {
-        if (this.state === GAME_STATES.PLAYING) this.state = GAME_STATES.PAUSE;
-        else if (this.state === GAME_STATES.PAUSE) this.state = GAME_STATES.PLAYING;
-      } else if (e.key === 'm' || e.key === 'M' || e.key === 'Escape') {
-        if (this.state !== GAME_STATES.MENU) {
-          this.state = GAME_STATES.MENU;
-          sounds.stopBgm();
-        }
+        if (this.state === GAME_STATES.PLAYING) this.openPauseMenu();
+        else if (this.state === GAME_STATES.PAUSE) this.resumeGame();
+      } else if (e.key === 'Escape') {
+        if (this.state === GAME_STATES.PLAYING) this.openPauseMenu();
+        else if (this.state === GAME_STATES.PAUSE) this.resumeGame();
+        else if (this.state !== GAME_STATES.MENU) this.returnToMainMenu();
+      } else if (e.key === 'm' || e.key === 'M') {
+        if (this.state !== GAME_STATES.MENU) this.returnToMainMenu();
       } else if (e.key === 't' || e.key === 'T') {
         this.showDebugPanel = !this.showDebugPanel;
       } else if (this.state === GAME_STATES.PLAYING) {
@@ -1137,8 +1208,6 @@ class Game {
         } else if (this.paddle.canShoot) {
           this.paddle.fire(sounds);
         }
-      } else if (this.state === GAME_STATES.PAUSE) {
-        this.state = GAME_STATES.PLAYING;
       } else if (this.state === GAME_STATES.RETRY) {
         const btnW = 280;
         const btnX = CANVAS_WIDTH / 2 - btnW / 2;
@@ -1175,8 +1244,9 @@ class Game {
       userDisplay.className = 'user-badge clickable';
       authBtn.textContent = 'Logout';
     } else {
-      userDisplay.textContent = '👤 Guest';
-      userDisplay.className = 'user-badge';
+      // No guest badge: hide the name slot entirely until the player signs in.
+      userDisplay.textContent = '';
+      userDisplay.className = 'user-badge hidden';
       authBtn.textContent = 'Login / Register';
     }
   }
@@ -1284,10 +1354,48 @@ class Game {
       }
     });
 
-    document.getElementById('muteBtn').addEventListener('click', () => {
-      const isMuted = sounds.toggleMute();
-      document.getElementById('muteBtn').textContent = isMuted ? '🔇 Muted' : '🔊 Sound';
+    document.getElementById('pauseBtn').addEventListener('click', () => {
+      sounds.init();
+      if (this.state === GAME_STATES.PLAYING) this.openPauseMenu();
+      else if (this.state === GAME_STATES.PAUSE) this.resumeGame();
     });
+
+    document.getElementById('soundBtn').addEventListener('click', () => {
+      sounds.init();
+      sounds.toggleMute();
+      this.syncVolumeUI();
+      if (!sounds.isMuted()) sounds.playTone(760, 0.06, 'triangle', 980);
+    });
+
+    document.getElementById('resumeBtn').addEventListener('click', () => {
+      sounds.init();
+      this.resumeGame();
+    });
+
+    document.getElementById('replayBtn').addEventListener('click', () => {
+      sounds.init();
+      this.replayCurrentGame();
+    });
+
+    document.getElementById('menuBtn').addEventListener('click', () => {
+      this.returnToMainMenu();
+    });
+
+    const volumeSlider = document.getElementById('volumeSlider');
+    const volumeValue = document.getElementById('volumeValue');
+    volumeSlider.addEventListener('input', () => {
+      sounds.init();
+      const percent = Number(volumeSlider.value);
+      sounds.setVolume(percent / 100);
+      volumeValue.textContent = `${percent}%`;
+      this.syncSoundUI();
+    });
+    volumeSlider.addEventListener('change', () => {
+      // Short preview so the player can hear the chosen level.
+      if (sounds.getVolume() > 0) sounds.playTone(660, 0.08, 'triangle', 880);
+    });
+    this.syncVolumeUI();
+    this.syncSoundUI();
   }
 }
 

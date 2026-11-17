@@ -9,7 +9,7 @@ cd client
 npm test
 ```
 
-Kỳ vọng: `TOTAL TESTS: 79`, `PASSED: 79`, `FAILED: 0`.
+Kỳ vọng: `TOTAL TESTS: 94`, `PASSED: 94`, `FAILED: 0`.
 
 Hoặc từ thư mục gốc:
 
@@ -52,15 +52,15 @@ npm run dev
 ```
 
 Mở http://localhost:5173, sau đó:
-- Làm theo `TEST_PLAN.md` (25 ca TC01–TC25).
+- Làm theo `TEST_PLAN.md` (27 ca TC01–TC27).
 - Dùng `manual/QA_PANEL_CHECKLIST.md` để kiểm tra bảng QA bằng phím T.
 
 ## 5. Cấu trúc
 
 | Đường dẫn | Mục đích |
 | :--- | :--- |
-| `TEST_PLAN.md` | Kế hoạch 25 ca kiểm thử và tiêu chí nghiệm thu |
-| `automated/run-client-tests.js` | 79 kiểm tra logic game + entity |
+| `TEST_PLAN.md` | Kế hoạch 27 ca kiểm thử và tiêu chí nghiệm thu |
+| `automated/run-client-tests.js` | 94 kiểm tra logic game + entity |
 | `automated/run-api-smoke.sh` | 24 kiểm tra REST API trên server thật |
 | `manual/QA_PANEL_CHECKLIST.md` | Checklist phím tắt QA panel |
 | `evidence/` | Ảnh chụp màn hình |

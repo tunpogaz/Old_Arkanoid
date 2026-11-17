@@ -16,8 +16,34 @@ export const SURVIVAL_DESCENT_STEP = 42;
 export const DANGER_LINE_Y = CANVAS_HEIGHT - 130;
 export const DANGER_ALERT_MARGIN = 55;
 
+export const DEFAULT_VOLUME = 0.5;
+export const VOLUME_STORAGE_KEY = 'arkanoid_volume';
+export const LAST_VOLUME_STORAGE_KEY = 'arkanoid_last_volume';
+
 // Brick IDs that propagate a Domino chain when destroyed by an explosion.
 export const CHAINING_BRICK_TYPES = [5, 6]; // 5 = FALL_BOMB, 6 = AREA_BLAST
+
+/** Clamp a raw volume value (0..1) to the legal range. Invalid values fall back to 50%. */
+export function clampVolume(value, fallback = DEFAULT_VOLUME) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return fallback;
+  return Math.min(1, Math.max(0, numeric));
+}
+
+/** Volume percentage (0..100) used by the pause-menu slider. */
+export function volumeToPercent(value) {
+  return Math.round(clampVolume(value) * 100);
+}
+
+/**
+ * Mega Ball pierces regular bricks (it keeps its direction and can destroy
+ * several in one frame). Immortal bricks still bounce it back.
+ */
+export function shouldPierceBrick(ball, brick) {
+  if (!ball || !ball.isBigger) return false;
+  const immortal = brick && (typeof brick.isImmortal === 'function' ? brick.isImmortal() : brick.type === 2);
+  return !immortal;
+}
 
 /**
  * Normalize a REST base URL so it always ends with exactly one "/api".

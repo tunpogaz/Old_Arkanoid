@@ -29,7 +29,8 @@ Các vật phẩm rơi được tạo hình viên nhộng phát sáng nằm ngan
 ### 3. Điều Khiển & Vật Lý Chuẩn Xác
 - **Phát bóng có laser định hướng:** Quả bóng trên paddle chiếu tia laser dạng chấm sáng neon hiển thị hướng bay trước khi bắn. Người chơi làm chủ 100% góc phát bóng bằng phím di chuyển, không có yếu tố ngẫu nhiên.
 - **Điều khiển thanh paddle:** Hỗ trợ phím A, D hoặc các phím mũi tên trái phải với gia tốc mượt mà, không bị xung đột chuột.
-- **Âm thanh tổng hợp Web Audio API:** Mô phỏng âm thanh nảy bóng, tiếng súng laser, tiếng bom nổ và nhạc nền retro đa dạng.
+- **Âm thanh tổng hợp Web Audio API:** Mô phỏng âm thanh nảy bóng, tiếng súng laser, tiếng bom nổ và nhạc nền retro đa dạng. Nút loa 🔊/🔇 trên header bật/tắt tiếng nhanh ở mọi màn hình; mức âm lượng chỉnh trực tiếp trong menu tạm dừng (0–100%) và được ghi nhớ giữa các lần chơi.
+- **Menu tạm dừng đầy đủ:** Nút tạm dừng trên header chỉ hiển thị biểu tượng (⏸ khi chơi, ▶ khi đang dừng; hoặc P/ESC) mở overlay với CONTINUE, REPLAY, MAIN MENU và thanh âm lượng; game đứng yên hoàn toàn trong lúc mở menu. Tắt tiếng từ header vẫn có thể bật lại và chỉnh mức trong menu này.
 
 ### 4. Hệ Thống Tài Khoản Đám Mây & Bảng Xếp Hạng
 - Đăng ký và đăng nhập bảo mật bằng JSON Web Token.
@@ -70,8 +71,8 @@ arkanoid/
 │   ├── pom.xml                 # Cấu hình thư viện Maven backend
 │   └── Dockerfile              # Đóng gói backend nhiều tầng bằng OpenJDK 17
 ├── tests/                      # Toàn bộ tài nguyên kiểm thử QA
-│   ├── TEST_PLAN.md            # 25 ca kiểm thử và tiêu chí nghiệm thu
-│   ├── automated/              # Test client (79 kiểm tra) và smoke test REST API
+│   ├── TEST_PLAN.md            # 27 ca kiểm thử và tiêu chí nghiệm thu
+│   ├── automated/              # Test client (94 kiểm tra) và smoke test REST API
 │   ├── manual/                 # Checklist QA panel trong game
 │   ├── evidence/               # Ảnh bằng chứng
 │   └── reports/                # Báo cáo kết quả kiểm thử
@@ -157,8 +158,10 @@ Hệ thống đã tích hợp sẵn tệp cấu hình `render.yaml`. Quá trình
 | **Di chuyển phải** | Phím D hoặc Mũi tên phải | Di chuyển thanh paddle sang phải, tia ngắm bóng nghiêng phải |
 | **Phát bóng** | Phím Space hoặc Chuột trái | Bắn bóng theo hướng laser đang ngắm |
 | **Bắn đạn laser** | Phím Space hoặc Chuột trái | Bắn loạt đạn đôi khi nhặt được vật phẩm súng laser |
-| **Tạm dừng** | Phím P | Tạm dừng hoặc tiếp tục màn chơi |
-| **Quay về menu** | Phím M hoặc Phím ESC | Quay trở lại màn hình chính |
+| **Tạm dừng** | Nút ⏸/▶ trên header, phím P hoặc ESC | Mở menu CONTINUE / REPLAY / MAIN MENU kèm thanh âm lượng |
+| **Bật/tắt âm thanh** | Nút 🔊/🔇 trên header | Tắt tiếng ngay; bật lại bằng nút này hoặc kéo thanh âm lượng trong menu tạm dừng |
+| **Chỉnh âm lượng** | Thanh Sound trong menu tạm dừng | Giảm/tăng từ 0% (im lặng) đến 100%; tự lưu lại |
+| **Quay về menu** | Phím M hoặc nút MAIN MENU | Quay trở lại màn hình chính |
 
 ---
 
@@ -167,7 +170,7 @@ Hệ thống đã tích hợp sẵn tệp cấu hình `render.yaml`. Quá trình
 Toàn bộ tài nguyên kiểm thử nằm trong thư mục [`tests/`](tests/).
 
 ```bash
-# 79 kiểm tra logic game (client + shared rules)
+# 94 kiểm tra logic game (client + shared rules)
 cd client && npm test
 
 # 11 test backend Spring Boot
@@ -177,7 +180,7 @@ cd server && mvn test
 bash tests/automated/run-api-smoke.sh http://localhost:8080
 ```
 
-Kịch bản 25 ca kiểm thử tay: [`tests/TEST_PLAN.md`](tests/TEST_PLAN.md). Checklist QA panel: [`tests/manual/QA_PANEL_CHECKLIST.md`](tests/manual/QA_PANEL_CHECKLIST.md).
+Kịch bản 27 ca kiểm thử tay: [`tests/TEST_PLAN.md`](tests/TEST_PLAN.md). Checklist QA panel: [`tests/manual/QA_PANEL_CHECKLIST.md`](tests/manual/QA_PANEL_CHECKLIST.md).
 
 ---
 

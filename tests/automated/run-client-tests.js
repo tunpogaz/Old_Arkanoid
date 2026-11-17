@@ -125,6 +125,14 @@ async function runTestSuite() {
     'Empty API URL falls back to localhost'
   );
 
+  assertEqual(rules.clampVolume(-0.2), 0, 'Volume below 0 is clamped to mute');
+  assertEqual(rules.clampVolume(1.4), 1, 'Volume above 1 is clamped to max');
+  assertEqual(rules.clampVolume(0.25), 0.25, 'Valid volume is preserved');
+  assertEqual(rules.clampVolume('not-a-number'), 0.5, 'Invalid volume falls back to 50%');
+  assertEqual(rules.volumeToPercent(0.5), 50, 'Volume 0.5 maps to 50%');
+  assertEqual(rules.volumeToPercent(1), 100, 'Volume 1.0 maps to 100%');
+  assertEqual(rules.DEFAULT_VOLUME, 0.5, 'Default volume is 50%');
+
   // ------------------------------------------------------------------
   // GROUP 3: x3 Multi-Ball (real helper used by main.js)
   // ------------------------------------------------------------------
@@ -294,6 +302,40 @@ async function runTestSuite() {
   assert(aimBall.dx > 0, 'Ball launches in the aimed direction (right)');
   assertClose(Math.hypot(aimBall.dx, aimBall.dy), 7.5, 0.001, 'Launch speed is exactly 7.5px/frame');
   assert(aimBall.dy < 0, 'Ball always launches upward');
+
+  // ------------------------------------------------------------------
+  // GROUP 9: Mega Ball piercing
+  // ------------------------------------------------------------------
+  console.log('\n\x1b[36m[GROUP 9] Mega Ball Piercing\x1b[0m');
+
+  {
+    const bigBall = new Ball(100, 100, false);
+    bigBall.isBigger = true;
+    bigBall.dx = 5;
+    bigBall.dy = -3;
+    const normalBrick = new Brick(95, 95, 30, 30, BRICK_TYPES.NORMAL, 0, 0);
+    assertEqual(normalBrick.checkCollision(bigBall), true, 'Mega Ball collides with a regular brick');
+    assertEqual(bigBall.dx, 5, 'Mega Ball keeps horizontal direction through a regular brick');
+    assertEqual(bigBall.dy, -3, 'Mega Ball keeps vertical direction through a regular brick');
+    assertEqual(rules.shouldPierceBrick(bigBall, normalBrick), true, 'shouldPierceBrick is true for normal bricks');
+
+    const immortalBrick = new Brick(95, 95, 30, 30, BRICK_TYPES.IMMORTAL, 0, 0);
+    const bigBall2 = new Ball(100, 100, false);
+    bigBall2.isBigger = true;
+    bigBall2.dx = 5;
+    bigBall2.dy = -3;
+    immortalBrick.checkCollision(bigBall2);
+    assert(bigBall2.dx === -5 || bigBall2.dy === 3, 'Mega Ball still bounces off immortal bricks');
+    assertEqual(rules.shouldPierceBrick(bigBall2, immortalBrick), false, 'shouldPierceBrick is false for immortal bricks');
+
+    const normalBall = new Ball(100, 100, false);
+    normalBall.dx = 5;
+    normalBall.dy = -3;
+    const otherBrick = new Brick(95, 95, 30, 30, BRICK_TYPES.NORMAL, 0, 0);
+    otherBrick.checkCollision(normalBall);
+    assert(normalBall.dx === -5 || normalBall.dy === 3, 'Regular ball still bounces off regular bricks');
+    assertEqual(rules.shouldPierceBrick(normalBall, otherBrick), false, 'Regular ball never pierces');
+  }
 
   // ------------------------------------------------------------------
   // SUMMARY

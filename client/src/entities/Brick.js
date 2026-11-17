@@ -1,5 +1,5 @@
 import { PowerUp, POWERUP_TYPES } from './PowerUp.js';
-import { shouldDropNormalPowerUp } from '../systems/GameRules.js';
+import { shouldDropNormalPowerUp, shouldPierceBrick } from '../systems/GameRules.js';
 
 export const BRICK_TYPES = {
   EMPTY: 0,
@@ -114,10 +114,13 @@ export class Brick {
       const minOverlapX = Math.min(overlapLeft, overlapRight);
       const minOverlapY = Math.min(overlapTop, overlapBottom);
 
-      if (minOverlapX < minOverlapY) {
-        ball.dx = -ball.dx;
-      } else {
-        ball.dy = -ball.dy;
+      // Mega Ball smashes through regular bricks without changing direction.
+      if (!shouldPierceBrick(ball, this)) {
+        if (minOverlapX < minOverlapY) {
+          ball.dx = -ball.dx;
+        } else {
+          ball.dy = -ball.dy;
+        }
       }
       return true;
     }

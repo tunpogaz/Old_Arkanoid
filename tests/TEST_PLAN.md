@@ -8,10 +8,10 @@ Tài liệu dành cho đội QA độc lập. Toàn bộ tài nguyên kiểm th�
 
 ```text
 tests/
-├── TEST_PLAN.md                     # Tài liệu này (25 ca kiểm thử + tiêu chí nghiệm thu)
+├── TEST_PLAN.md                     # Tài liệu này (27 ca kiểm thử + tiêu chí nghiệm thu)
 ├── README.md                        # Hướng dẫn chạy nhanh cho QA
 ├── automated/
-│   ├── run-client-tests.js          # 79 kiểm tra tự động (game rules + entities)
+│   ├── run-client-tests.js          # 94 kiểm tra tự động (game rules + entities)
 │   └── run-api-smoke.sh             # Smoke test REST API thật (curl + jq)
 ├── manual/
 │   └── QA_PANEL_CHECKLIST.md        # Checklist thao tác QA panel trong game
@@ -26,7 +26,7 @@ tests/
 
 ## 1. Phương Thức Kiểm Thử Tự Động
 
-### 1.1. Client + luật chơi dùng chung (79 kiểm tra)
+### 1.1. Client + luật chơi dùng chung (94 kiểm tra)
 
 ```bash
 cd client
@@ -52,7 +52,7 @@ Bộ test import **module sản phẩm thật** (`GameRules.js`, `MapData.js`, `
 | 7 | Domino chain lan truyền qua bom, không phá gạch bất tử, không lặp | 8 |
 | 8 | Kích thước paddle WIDE/MINI, ngắm bóng trái/phải, tốc độ phóng 7.5 | 13 |
 
-Kỳ vọng: `TOTAL TESTS: 79`, `PASSED: 79`, `FAILED: 0`, exit code 0.
+Kỳ vọng: `TOTAL TESTS: 94`, `PASSED: 94`, `FAILED: 0`, exit code 0.
 
 ### 1.2. Backend Spring Boot
 
@@ -96,8 +96,8 @@ Mở game trên trình duyệt, bấm **T** để bật/tắt bảng **QA TESTER
 | **L** | Campaign: sang màn kế tiếp; Survival: tăng số đợt sóng |
 | **K** | Phá toàn bộ gạch thường (giữ gạch bất tử) để kiểm tra qua màn |
 | **G** | Trừ 1 mạng (gọi đúng luồng mất bóng) để kiểm tra Retry |
-| **P** | Tạm dừng / tiếp tục |
-| **M** hoặc **ESC** | Về Menu chính từ bất kỳ trạng thái nào (trừ khi đang gõ trong ô đăng nhập) |
+| **P** hoặc **ESC** | Mở menu tạm dừng (CONTINUE / REPLAY / MAIN MENU / âm lượng); nhấn lần nữa để tiếp tục |
+| **M** | Về Menu chính ngay từ bất kỳ trạng thái nào (trừ khi đang gõ trong ô đăng nhập) |
 | **A / D / ← / →** | Di chuyển paddle |
 | **Space / Click trái** | Phóng bóng hoặc bắn laser |
 
@@ -105,7 +105,7 @@ Lưu ý: phím tắt không hoạt động khi con trỏ đang ở trong ô nh�
 
 ---
 
-## 3. Danh Mục 25 Ca Kiểm Thử Chức Năng
+## 3. Danh Mục 27 Ca Kiểm Thử Chức Năng
 
 ### Nhóm 1: Điều Khiển & Cơ Chế Phát Bóng
 
@@ -159,8 +159,8 @@ Lưu ý: phím tắt không hoạt động khi con trỏ đang ở trong ô nh�
 
 - **TC12: Nhặt vật phẩm Mega Ball**
   - Thao tác: Nhấn 4 hoặc nhặt MEGA.
-  - Kết quả mong muốn: Bóng tăng bán kính 11→19, phát sáng vàng trong ~9 giây, phá gạch thường khi chạm.
-  - Ghi chú: Bóng lớn **không xuyên** gạch; đây là hành vi hiện tại của sản phẩm, đã ghi nhận trong báo cáo.
+  - Kết quả mong muốn: Bóng tăng bán kính 11→19, phát sáng vàng trong ~9 giây; **xuyên qua và phá gạch thường mà không đổi hướng**, có thể phá nhiều gạch trong cùng một frame.
+  - Ghi chú: Gạch bất tử vẫn làm bóng nảy lại; hết thời gian thì bóng trở về kích thước thường.
 
 - **TC13: Vật phẩm mở rộng / thu hẹp**
   - Thao tác: Nhấn 1 (WIDE), sau đó 2 (MINI).
@@ -214,20 +214,30 @@ Lưu ý: phím tắt không hoạt động khi con trỏ đang ở trong ô nh�
 
 - **TC24: Đăng ký & Đăng nhập**
   - Thao tác: Bấm Login / Register, tạo tài khoản rồi đăng nhập.
-  - Kết quả mong muốn: Header hiện tên người chơi; JWT được lưu vào localStorage; dữ liệu xấu trả lỗi 400 rõ ràng.
+  - Kết quả mong muốn: Header hiện tên người chơi sau khi đăng nhập; khi chưa đăng nhập không có nhãn "Guest" (chỉ còn nút Login / Register); JWT được lưu vào localStorage; dữ liệu xấu trả lỗi 400 rõ ràng.
 
 - **TC25: Ghi nhận điểm & Bảng xếp hạng**
   - Thao tác: Kết thúc game khi đã đăng nhập, hoặc mở LEADERBOARD.
   - Kết quả mong muốn: Điểm cao nhất của mỗi người chơi xuất hiện đúng một lần trong top 10; thứ hạng toàn cầu tính theo người chơi, không theo số lần nộp điểm.
 
+### Nhóm 7: Menu Tạm Dừng & Âm Lượng
+
+- **TC26: Nút dừng và menu tạm dừng**
+  - Thao tác: Đang chơi, bấm nút tạm dừng trên header (chỉ có biểu tượng ⏸, hoặc P/ESC).
+  - Kết quả mong muốn: Game đứng yên, overlay hiện `PAUSED` với 3 nút **CONTINUE**, **REPLAY**, **MAIN MENU**; nút header đổi thành biểu tượng ▶, không kèm chữ. CONTINUE tiếp tục đúng vị trí; REPLAY tải lại màn hiện tại và giữ điểm; MAIN MENU về màn hình chính và tắt nhạc nền.
+
+- **TC27: Âm lượng và bật/tắt tiếng**
+  - Thao tác: Bấm nút loa 🔊 trên header để tắt tiếng, sau đó mở menu tạm dừng và kéo thanh **Sound** từ 0% đến 100%; tải lại trang.
+  - Kết quả mong muốn: Nút loa chuyển thành 🔇 và mọi âm thanh im lặng; tắt tiếng từ header không khóa menu — vẫn bật lại được bằng cách kéo thanh âm lượng trong pause menu. Nhạc nền và hiệu ứng to/nhỏ tương ứng; 0% im lặng hoàn toàn; giá trị được lưu vào `localStorage` và khôi phục sau khi tải lại.
+
 ---
 
 ## 4. Tiêu Chí Nghiệm Thu
 
-1. `npm test` (client): 79/79 PASS, exit code 0.
+1. `npm test` (client): 94/94 PASS, exit code 0.
 2. `mvn test` (server): 11/11 PASS, BUILD SUCCESS.
 3. `run-api-smoke.sh`: FAILED = 0.
-4. Kiểm thử tay TC01–TC25: 25/25 PASS theo checklist.
+4. Kiểm thử tay TC01–TC27: 27/27 PASS theo checklist.
 5. Không có lỗi console nghiêm trọng khi mở game và chơi 20 màn.
 6. Báo cáo kết quả được ghi tại `tests/reports/TEST_REPORT_2026-11-18.md`.
 

@@ -1,11 +1,33 @@
+import { clampVolume, volumeToPercent, DEFAULT_VOLUME, VOLUME_STORAGE_KEY, LAST_VOLUME_STORAGE_KEY } from './GameRules.js';
+
 // Web Audio API Sound Synthesizer & BGM Manager
 class SoundManager {
   constructor() {
     this.ctx = null;
     this.bgm = null;
-    this.muted = false;
-    this.volume = 0.5;
     this.bgmIndex = 1;
+    this.volume = this.loadVolume();
+    // Keep the "unmute" target in sync with the current level when sound is on.
+    this.lastAudibleVolume = this.volume > 0 ? this.volume : this.loadLastAudible();
+  }
+
+  loadVolume() {
+    try {
+      const saved = parseFloat(localStorage.getItem(VOLUME_STORAGE_KEY));
+      return Number.isFinite(saved) ? clampVolume(saved) : DEFAULT_VOLUME;
+    } catch (e) {
+      return DEFAULT_VOLUME;
+    }
+  }
+
+  loadLastAudible() {
+    try {
+      const saved = parseFloat(localStorage.getItem(LAST_VOLUME_STORAGE_KEY));
+      const value = Number.isFinite(saved) ? clampVolume(saved) : DEFAULT_VOLUME;
+      return value > 0 ? value : DEFAULT_VOLUME;
+    } catch (e) {
+      return DEFAULT_VOLUME;
+    }
   }
 
   init() {
@@ -18,12 +40,45 @@ class SoundManager {
     }
   }
 
+  getVolume() {
+    return this.volume;
+  }
+
+  getVolumePercent() {
+    return volumeToPercent(this.volume);
+  }
+
+  isMuted() {
+    return this.volume <= 0;
+  }
+
+  /** Quick mute/unmute used by the header speaker button. Remembers the last audible level. */
   toggleMute() {
-    this.muted = !this.muted;
-    if (this.bgm) {
-      this.bgm.muted = this.muted;
+    if (this.volume > 0) {
+      this.lastAudibleVolume = this.volume;
+      this.setVolume(0);
+    } else {
+      this.setVolume(this.lastAudibleVolume || DEFAULT_VOLUME);
     }
-    return this.muted;
+    return this.volume;
+  }
+
+  /** Change master volume (0..1). Applies to running BGM and all future SFX. */
+  setVolume(value) {
+    this.volume = clampVolume(value, this.volume);
+    if (this.volume > 0) {
+      this.lastAudibleVolume = this.volume;
+      try {
+        localStorage.setItem(LAST_VOLUME_STORAGE_KEY, String(this.volume));
+      } catch (e) {}
+    }
+    if (this.bgm) {
+      this.bgm.volume = this.volume * 0.4;
+    }
+    try {
+      localStorage.setItem(VOLUME_STORAGE_KEY, String(this.volume));
+    } catch (e) {}
+    return this.volume;
   }
 
   playBgm(mapIndex = 1) {
@@ -36,7 +91,6 @@ class SoundManager {
       this.bgm = new Audio(`/assets/sound/mapsound${idx}.mp3`);
       this.bgm.loop = true;
       this.bgm.volume = this.volume * 0.4;
-      this.bgm.muted = this.muted;
       this.bgm.play().catch(() => {});
     } catch (e) {
       console.warn("BGM play error:", e);
@@ -60,7 +114,7 @@ class SoundManager {
   }
 
   playExplosion() {
-    if (this.muted) return;
+    if (this.volume <= 0) return;
     this.init();
     try {
       const bufferSize = this.ctx.sampleRate * 0.25;
@@ -89,7 +143,7 @@ class SoundManager {
   }
 
   playPowerup() {
-    if (this.muted) return;
+    if (this.volume <= 0) return;
     this.init();
     try {
       [440, 554, 659, 880].forEach((freq, idx) => {
@@ -103,7 +157,7 @@ class SoundManager {
   }
 
   playLoseBall() {
-    if (this.muted) return;
+    if (this.volume <= 0) return;
     this.init();
     [300, 250, 180, 120].forEach((freq, idx) => {
       setTimeout(() => this.playTone(freq, 0.1, 'sawtooth'), idx * 70);
@@ -111,7 +165,7 @@ class SoundManager {
   }
 
   playVictory() {
-    if (this.muted) return;
+    if (this.volume <= 0) return;
     this.init();
     [523, 659, 784, 1046].forEach((freq, idx) => {
       setTimeout(() => this.playTone(freq, 0.18, 'triangle'), idx * 120);
@@ -123,7 +177,7 @@ class SoundManager {
   }
 
   playTone(freq, duration, type = 'sine', slideTo = null) {
-    if (this.muted) return;
+    if (this.volume <= 0) return;
     this.init();
     try {
       const osc = this.ctx.createOscillator();

@@ -2,7 +2,7 @@
 
 - **Ngày:** 2026-11-18
 - **Phạm vi:** toàn bộ client (game + QA panel), backend Spring Boot, tài liệu kiểm thử và hạ tầng test
-- **Kết luận nhanh:** tất cả tầng kiểm thử đều đạt (79 client + 11 backend + 24 API). Đã phát hiện và sửa **9 lỗi sản phẩm** trong game/backend cùng **1 vấn đề nghiêm trọng của bộ test cũ** (test "xanh giả"). Còn **1 hạn chế sản phẩm đã biết** (Mega Ball không xuyên gạch) — đã ghi rõ trong TEST_PLAN, không chặn bước phát triển tiếp theo.
+- **Kết luận nhanh:** tất cả tầng kiểm thử đều đạt (94 client + 11 backend + 24 API). Đã phát hiện và sửa **9 lỗi sản phẩm** trong game/backend cùng **1 vấn đề nghiêm trọng của bộ test cũ** (test "xanh giả"). Hạn chế Mega Ball đã được khắc phục ở đợt 2 (bóng xuyên gạch thường), cùng với menu tạm dừng và âm lượng 0–100%.
 
 ---
 
@@ -23,7 +23,7 @@
 
 | Tầng | Lệnh | Kết quả |
 | :--- | :--- | :--- |
-| Client automated | `cd client && npm test` | **79/79 PASS, 0 FAIL** |
+| Client automated | `cd client && npm test` | **94/94 PASS, 0 FAIL** |
 | Backend JUnit | `cd server && mvn test` | **11/11 PASS** (10 integration + 1 context load), BUILD SUCCESS |
 | REST API smoke (server thật) | `bash tests/automated/run-api-smoke.sh http://localhost:8080` | **24/24 PASS, FAILED: 0** |
 | Leaderboard nhiều người chơi | kiểm tra trực tiếp sau khi restart backend | **1 dòng/người chơi, đúng điểm cao nhất** |
@@ -34,9 +34,9 @@
 
 ## 3. Chi Tiết Theo Tầng
 
-### 3.1. Client — 79 kiểm tra tự động
+### 3.1. Client — 94 kiểm tra tự động
 
-Bộ test import **module thật** của game (không dùng mock cho logic), gồm 8 nhóm:
+Bộ test import **module thật** của game (không dùng mock cho logic), gồm 9 nhóm:
 
 1. **20 màn chơi & cụm domino** — đủ 20 level, dữ liệu gạch hợp lệ, cụm domino có gạch nổ.
 2. **GameRules dùng chung & chuẩn hóa URL API** — hằng số, `normalizeApiUrl`, biên màn chơi.
@@ -46,6 +46,7 @@ Bộ test import **module thật** của game (không dùng mock cho logic), g�
 6. **Đường nguy hiểm survival** — biên cảnh báo và biên thua chính xác đến từng pixel.
 7. **Lan truyền domino thật** — `collectBlastTargets` đệ quy qua gạch nổ, chặn gạch bất tử/đã phá, không trùng mục tiêu.
 8. **Paddle & phóng bóng xác định** — kích thước 140/224/91px, di chuyển 12px/frame, ngắm trái/phải, tốc độ phóng 7.5px/frame, luôn hướng lên.
+9. **Mega Ball xuyên gạch** — giữ nguyên vector khi chạm gạch thường, vẫn nảy khỏi gạch bất tử; kèm kiểm tra clamp âm lượng 0–100%.
 
 ### 3.2. Backend — 11 test JUnit
 
@@ -88,7 +89,7 @@ Kiểm tra bổ sung ngoài script: tạo **Alice** (500, 900, 300) và **Bob** 
 | :--- | :--- | :--- | :--- | :--- |
 | D1 | Cao | Bom domino chỉ phá vùng đầu tiên, không lan sang gạch nổ khác | Hàm nổ không đệ quy, không xếp lại gạch nổ vào hàng đợi | Viết `collectBlastTargets` BFS đệ quy trong `GameRules.js`; trình duyệt: phá 75/81 gạch, chuỗi ổn định |
 | D2 | Cao | Leaderboard hiển thị một người nhiều lần | JPQL lấy mỗi người một dòng nhưng dùng subquery scalar toàn cục (`MIN(s2.id)`) | Correlated subquery theo `s.user` + `MIN(s3.id)`; JUnit 10/10 và kiểm tra live 2 người/2 dòng |
-| D3 | Cao | Bộ test cũ "xanh giả": retry dùng mock, tỷ lệ rơi lấy mẫu ngẫu nhiên, logic multi-ball/domino/URL bị copy | Test không chạy code thật | Tách `GameRules.js` làm nguồn sự thật duy nhất; test import module thật, stub `Math.random`; 79 check có ý nghĩa |
+| D3 | Cao | Bộ test cũ "xanh giả": retry dùng mock, tỷ lệ rơi lấy mẫu ngẫu nhiên, logic multi-ball/domino/URL bị copy | Test không chạy code thật | Tách `GameRules.js` làm nguồn sự thật duy nhất; test import module thật, stub `Math.random`; 94 check có ý nghĩa |
 | D4 | Trung bình | `M`/`ESC` không có tác dụng khi đang chơi | Handler chỉ xử lý ở một số state | Cho phép về MENU từ mọi state khác MENU; xác minh trình duyệt |
 | D5 | Trung bình | Nuke phá 8 gạch **đầu tiên** thay vì ngẫu nhiên như tài liệu | Duyệt mảng theo thứ tự | Fisher–Yates rồi lấy tối đa 8 gạch còn sống; trình duyệt xác nhận 8 |
 | D6 | Trung bình | Payload không hợp lệ trả **403** thay vì 400 | `/error` bị Spring Security chặn | `permitAll` cho `/error` + `AuthenticationEntryPoint` trả 401; JUnit + smoke xác nhận |
@@ -103,7 +104,7 @@ Ngoài ra đã gia cố: keydown bỏ qua `INPUT/TEXTAREA/SELECT/contentEditable
 
 ## 5. Hạn Chế Đã Biết
 
-- **Mega Ball** (phím QA `4`) chỉ tăng kích thước bóng, **không xuyên gạch** như tên gọi có thể gợi ý. Hành vi hiện tại được xem là thiết kế và đã ghi rõ ở TC12 trong `tests/TEST_PLAN.md`. Nếu muốn xuyên gạch, cần một thay đổi gameplay riêng.
+- **Mega Ball** (phím QA `4`) đã được nâng cấp ở đợt 2: bóng xuyên qua và phá liên tiếp gạch thường mà không đổi hướng; gạch bất tử vẫn làm bóng nảy lại. Hành vi mới được ghi ở TC12 và kiểm tra tự động ở Group 9.
 - Backend chạy JDK 25 trong khi target là Java 17: có cảnh báo `restricted method` của Tomcat, không ảnh hưởng kết quả test.
 - Screenshot trong `tests/evidence/` được chụp trước lượt sửa cuối; các kết quả sau sửa được xác minh bằng số liệu đo trong trình duyệt và output test.
 
@@ -113,7 +114,7 @@ Ngoài ra đã gia cố: keydown bỏ qua `INPUT/TEXTAREA/SELECT/contentEditable
 
 - Ảnh menu: [`tests/evidence/01-menu.jpg`](../evidence/01-menu.jpg)
 - Ảnh QA TESTER PANEL: [`tests/evidence/02-qa-panel.jpg`](../evidence/02-qa-panel.jpg)
-- Kế hoạch 25 ca: [`tests/TEST_PLAN.md`](../TEST_PLAN.md)
+- Kế hoạch 27 ca: [`tests/TEST_PLAN.md`](../TEST_PLAN.md)
 - Checklist QA panel: [`tests/manual/QA_PANEL_CHECKLIST.md`](../manual/QA_PANEL_CHECKLIST.md)
 - Hướng dẫn chạy: [`tests/README.md`](../README.md)
 
@@ -137,11 +138,23 @@ cd client && npm run build
 
 # 5. Kiểm thử tay
 #    Mở http://localhost:5173, nhấn T để mở QA panel,
-#    làm theo tests/manual/QA_PANEL_CHECKLIST.md và TC01–TC25.
+#    làm theo tests/manual/QA_PANEL_CHECKLIST.md và TC01–TC27.
 ```
 
 ---
 
 ## 8. Kết Luận
 
-Ba tầng kiểm thử hiện đều **xanh và có ý nghĩa**: client chạy logic thật, backend kiểm tra cả hành vi bảo mật/validation, API smoke chạy trên server thật với tài khoản mới mỗi lần. Các lỗi nghiêm trọng nhất (domino, leaderboard, bộ test giả, thoát game) đã được sửa và xác minh lại. Có thể chuyển sang bước phát triển tiếp theo; việc còn lại chỉ là quyết định sản phẩm về Mega Ball.
+Ba tầng kiểm thử hiện đều **xanh và có ý nghĩa**: client chạy logic thật, backend kiểm tra cả hành vi bảo mật/validation, API smoke chạy trên server thật với tài khoản mới mỗi lần. Các lỗi nghiêm trọng nhất (domino, leaderboard, bộ test giả, thoát game, Mega Ball) đã được sửa và xác minh lại. Có thể chuyển sang bước phát triển tiếp theo.
+
+---
+
+## 9. Bổ Sung Đợt 2 — Menu Tạm Dừng & Âm Lượng
+
+- Thêm nút tạm dừng trên header chỉ gồm biểu tượng (⏸ khi chơi, ▶ khi dừng — không kèm chữ) và overlay tạm dừng với **CONTINUE / REPLAY / MAIN MENU**.
+- Thêm nút loa 🔊/🔇 trên header ở mọi màn hình để bật/tắt tiếng nhanh; khi đã tắt tiếng vẫn mở lại và chỉnh mức bình thường trong pause menu (nút header tự đồng bộ lại theo mức âm lượng).
+- Bỏ nhãn "Guest" ở header: khi chưa đăng nhập chỉ còn nút Login / Register, sau khi đăng nhập mới hiện tên người chơi.
+- Thay cơ chế bật/tắt tiếng bằng thanh **âm lượng 0–100%**, áp dụng cho cả nhạc nền và hiệu ứng; giá trị lưu trong `localStorage`.
+- P/ESC mở menu tạm dừng; M về menu chính ngay. Game hoàn toàn đứng yên khi pause.
+- Mega Ball xuyên gạch thường nhưng vẫn nảy khỏi gạch bất tử.
+- Kiểm tra bổ sung: 15 test tự động mới (tổng **94/94**) và xác minh trên trình duyệt: nút pause, overlay, 3 nút, slider 23% → BGM 0.092, 0% im lặng, 100% = 0.4, lưu/khôi phục 37% sau reload, REPLAY giữ điểm 1234 và nạp lại 81 gạch. Đợt chỉnh UI cuối: nút pause chỉ còn biểu tượng; không còn "Guest"; nút loa header tắt/mở đúng và thanh âm lượng trong pause menu vẫn hoạt động khi đang tắt tiếng.

@@ -10,14 +10,34 @@
   <header>
     <div class="logo">⚡ ARKANOID ONLINE</div>
     <div class="user-panel">
-      <span id="userDisplay" class="user-badge" title="Click to view player stats">👤 Guest</span>
-      <button id="muteBtn" class="btn btn-secondary">🔊 Sound</button>
+      <span id="userDisplay" class="user-badge hidden" title="Click to view player stats"></span>
+      <button id="soundBtn" class="btn btn-secondary icon-btn" title="Mute sound" aria-label="Mute sound" aria-pressed="false">🔊</button>
+      <button id="pauseBtn" class="btn btn-secondary icon-btn hidden" title="Pause (P)" aria-label="Pause">⏸</button>
       <button id="authBtn" class="btn">Login / Register</button>
     </div>
   </header>
 
   <main class="game-container">
     <canvas id="gameCanvas"></canvas>
+
+    <div id="pauseOverlay" class="pause-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="pauseTitle">
+      <div class="pause-card">
+        <div class="pause-eyebrow">GAME PAUSED</div>
+        <h2 id="pauseTitle">⏸ PAUSED</h2>
+        <button id="resumeBtn" class="pause-btn primary">▶ CONTINUE</button>
+        <button id="replayBtn" class="pause-btn">↻ REPLAY</button>
+        <button id="menuBtn" class="pause-btn ghost">⌂ MAIN MENU</button>
+
+        <div class="volume-panel">
+          <div class="volume-head">
+            <span>🔊 Sound</span>
+            <span id="volumeValue">50%</span>
+          </div>
+          <input id="volumeSlider" type="range" min="0" max="100" step="1" value="50" aria-label="Master sound volume" />
+          <div class="volume-scale"><span>Mute</span><span>Max</span></div>
+        </div>
+      </div>
+    </div>
   </main>
 
   <!-- Toast Notification Container -->
@@ -75,8 +95,9 @@
         <ul>
           <li><strong>A / D or Arrow Keys:</strong> Move paddle Left & Right</li>
           <li><strong>Spacebar / Left Click:</strong> Fire lasers / Launch ball / Continue</li>
-          <li><strong>P:</strong> Pause / Resume game</li>
-          <li><strong>M / ESC:</strong> Return to Main Menu</li>
+          <li><strong>P / ESC:</strong> Open the pause menu (Continue, Replay, Main Menu, Volume)</li>
+          <li><strong>M:</strong> Return to Main Menu immediately</li>
+          <li><strong>🔊 / 🔇 in the header:</strong> Quickly mute or restore sound. If sound is off, open the pause menu to turn it back up.</li>
         </ul>
         <br />
         <p><strong>Modes & Features:</strong></p>
