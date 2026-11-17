@@ -54,6 +54,7 @@ class Game {
     // 3 Continues / Retries System
     this.retriesLeft = 3;
     this.maxRetries = 3;
+    this.showDebugPanel = false;
 
     // Survival Mode Attributes
     this.survivalTime = 0;
@@ -431,14 +432,32 @@ class Game {
         break;
       case POWERUP_TYPES.DUPLICATE:
         const currentCount = this.balls.length;
+        const maxAllowedBalls = 18;
         for (let i = 0; i < currentCount; i++) {
+          if (this.balls.length >= maxAllowedBalls) break;
           const b = this.balls[i];
+          const speed = Math.hypot(b.dx, b.dy) || b.baseSpeed;
+          const currentAngle = Math.atan2(b.dx, -b.dy);
+
+          // Ball 2: Fan out left by 25 degrees
+          const angleLeft = currentAngle - 0.44;
           const b2 = new Ball(b.x, b.y, false);
-          b2.dx = -b.dx * 1.05;
-          b2.dy = b.dy;
+          b2.dx = speed * Math.sin(angleLeft);
+          b2.dy = -speed * Math.cos(angleLeft);
+          if (b.isBigger) b2.setBigger();
           this.balls.push(b2);
+
+          // Ball 3: Fan out right by 25 degrees
+          if (this.balls.length < maxAllowedBalls) {
+            const angleRight = currentAngle + 0.44;
+            const b3 = new Ball(b.x, b.y, false);
+            b3.dx = speed * Math.sin(angleRight);
+            b3.dy = -speed * Math.cos(angleRight);
+            if (b.isBigger) b3.setBigger();
+            this.balls.push(b3);
+          }
         }
-        this.particles.addFloatingText('MULTI BALL!', this.paddle.x + this.paddle.w / 2, this.paddle.y - 20, '#a855f7');
+        this.particles.addFloatingText('x3 MULTI BALL!', this.paddle.x + this.paddle.w / 2, this.paddle.y - 20, '#a855f7');
         break;
       case POWERUP_TYPES.BIGGER_BALL:
         this.balls.forEach(b => b.setBigger());
@@ -739,6 +758,43 @@ class Game {
       ctx.restore();
       this.renderLevelSelect();
     }
+
+    if (this.showDebugPanel) {
+      this.renderDebugPanel();
+    }
+  }
+
+  renderDebugPanel() {
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.94)';
+    ctx.strokeStyle = '#38bdf8';
+    ctx.lineWidth = 1.5;
+    const px = 30;
+    const py = 60;
+    const pw = 450;
+    const ph = 195;
+    ctx.beginPath();
+    ctx.roundRect(px, py, pw, ph, 8);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = '#38bdf8';
+    ctx.font = 'bold 15px "Courier New", monospace';
+    ctx.fillText('🛠 QA TESTER PANEL - Phím T đóng mở', px + 15, py + 25);
+
+    ctx.fillStyle = '#f8fafc';
+    ctx.font = '13px "Courier New", monospace';
+    ctx.fillText(`Trạng thái: ${this.state} | Chế độ: ${this.mode} | Số bóng: ${this.balls.length}`, px + 15, py + 52);
+    ctx.fillText(`Mạng: ${this.paddle.lives} | Lượt còn: ${this.retriesLeft} | Màn: ${this.currentLevel} / 20`, px + 15, py + 74);
+
+    ctx.fillStyle = '#fde047';
+    ctx.fillText('Phím 1 đến 8: Nhận ngay PowerUp tương ứng', px + 15, py + 105);
+    ctx.fillText('Phím 3: Thử nghiệm nhân 3 bóng Multi-Ball', px + 15, py + 126);
+    ctx.fillText('Phím L: Chuyển màn kế tiếp | Phím K: Xóa sạch gạch', px + 15, py + 147);
+    ctx.fillText('Phím G: Trừ mạng để test màn hình Retry', px + 15, py + 168);
+    ctx.fillText('Phím M hoặc ESC: Về Menu | Phím Space: Bắn', px + 15, py + 189);
+    ctx.restore();
   }
 
   renderMenu() {
@@ -983,6 +1039,25 @@ class Game {
         if (this.state === GAME_STATES.RETRY || this.state === GAME_STATES.GAMEOVER || this.state === GAME_STATES.VICTORY || this.state === GAME_STATES.PAUSE) {
           this.state = GAME_STATES.MENU;
           sounds.stopBgm();
+        }
+      } else if (e.key === 't' || e.key === 'T') {
+        this.showDebugPanel = !this.showDebugPanel;
+      } else if (this.state === GAME_STATES.PLAYING) {
+        if (e.key === '1') this.applyPowerUp({ type: POWERUP_TYPES.LONGER });
+        else if (e.key === '2') this.applyPowerUp({ type: POWERUP_TYPES.SHORTEN });
+        else if (e.key === '3') this.applyPowerUp({ type: POWERUP_TYPES.DUPLICATE });
+        else if (e.key === '4') this.applyPowerUp({ type: POWERUP_TYPES.BIGGER_BALL });
+        else if (e.key === '5') this.applyPowerUp({ type: POWERUP_TYPES.LIFE_UP });
+        else if (e.key === '6') this.applyPowerUp({ type: POWERUP_TYPES.SHOT });
+        else if (e.key === '7') this.applyPowerUp({ type: POWERUP_TYPES.FALL_BOOM });
+        else if (e.key === '8') this.applyPowerUp({ type: POWERUP_TYPES.GOLD });
+        else if (e.key === 'l' || e.key === 'L') {
+          if (this.mode === GAME_MODES.CAMPAIGN) this.nextLevel();
+          else this.survivalWave++;
+        } else if (e.key === 'k' || e.key === 'K') {
+          this.bricks.forEach(b => { if (!b.isImmortal()) b.destroyed = true; });
+        } else if (e.key === 'g' || e.key === 'G') {
+          if (this.balls.length > 0) this.handleBallLost(this.balls[0]);
         }
       }
     });
