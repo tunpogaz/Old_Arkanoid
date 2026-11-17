@@ -88,8 +88,8 @@ export class Brick {
       const r = luckyList[Math.floor(Math.random() * luckyList.length)];
       return new PowerUp(this.x + this.w / 2, this.y + this.h / 2, r);
     }
-    // Random chance for normal bricks (~16%)
-    if (Math.random() < 0.16) {
+    // Random chance for normal bricks: tuned down from 16% to 6% for cleaner, balanced gameplay
+    if (Math.random() < 0.06) {
       return new PowerUp(this.x + this.w / 2, this.y + this.h / 2);
     }
     return null;

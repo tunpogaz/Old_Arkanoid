@@ -10,14 +10,27 @@ import { api } from './api/apiClient.js';
 const CANVAS_WIDTH = 1200;
 const CANVAS_HEIGHT = 750;
 
+export const GAME_MODES = {
+  CAMPAIGN: 'CAMPAIGN',
+  SURVIVAL: 'SURVIVAL'
+};
+
 export const GAME_STATES = {
   MENU: 'MENU',
   PICK_LEVEL: 'PICK_LEVEL',
   PLAYING: 'PLAYING',
   PAUSE: 'PAUSE',
+  RETRY: 'RETRY',
   GAMEOVER: 'GAMEOVER',
   VICTORY: 'VICTORY'
 };
+
+function formatTime(frames) {
+  const totalSeconds = Math.floor(frames / 60);
+  const mins = Math.floor(totalSeconds / 60);
+  const secs = totalSeconds % 60;
+  return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+}
 
 class Game {
   constructor() {
@@ -27,6 +40,8 @@ class Game {
     this.canvas.height = CANVAS_HEIGHT;
 
     this.state = GAME_STATES.MENU;
+    this.mode = GAME_MODES.CAMPAIGN;
+
     this.currentLevel = 1;
     this.unlockedLevel = 1;
     this.score = 0;
@@ -35,6 +50,18 @@ class Game {
     this.comboTimer = 0;
     this.frameCount = 0;
     this.keys = { left: false, right: false };
+
+    // 3 Continues / Retries System
+    this.retriesLeft = 3;
+    this.maxRetries = 3;
+
+    // Survival Mode Attributes
+    this.survivalTime = 0;
+    this.survivalWave = 1;
+    this.survivalWaveTimer = 0;
+    this.survivalWaveInterval = 540; // 9 seconds
+    this.dangerLineY = CANVAS_HEIGHT - 130;
+    this.dangerAlert = false;
 
     this.paddle = new Paddle(CANVAS_WIDTH, CANVAS_HEIGHT);
     this.balls = [];
@@ -91,8 +118,18 @@ class Game {
   }
 
   getBackground() {
+    if (this.mode === GAME_MODES.SURVIVAL) {
+      return this.bgImages[6] || this.bgImages[1];
+    }
     const idx = ((this.currentLevel - 1) % 8) + 1;
     return this.bgImages[idx];
+  }
+
+  startCampaign(level = 1) {
+    this.mode = GAME_MODES.CAMPAIGN;
+    this.retriesLeft = this.maxRetries;
+    this.score = 0;
+    this.startLevel(level);
   }
 
   startLevel(level) {
@@ -100,6 +137,7 @@ class Game {
       this.showToast(`🔒 Level ${level} is locked! Clear previous levels first.`, 'error');
       return;
     }
+    this.mode = GAME_MODES.CAMPAIGN;
     this.currentLevel = level;
     this.paddle.reset();
     this.paddle.lives = 3;
@@ -113,6 +151,94 @@ class Game {
 
     this.state = GAME_STATES.PLAYING;
     sounds.playBgm(this.currentLevel);
+  }
+
+  retryCurrentLevel() {
+    this.paddle.reset();
+    this.paddle.lives = 3;
+    this.balls = [new Ball(this.paddle.x + this.paddle.w / 2, this.paddle.y - 14, true)];
+    this.powerups = [];
+    this.combo = 0;
+    this.loadMap(this.currentLevel);
+    this.state = GAME_STATES.PLAYING;
+    sounds.playBgm(this.currentLevel);
+    this.particles.addFloatingText(`CONTINUE #${this.maxRetries - this.retriesLeft + 1}!`, CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2, '#38bdf8');
+  }
+
+  startSurvivalMode() {
+    this.mode = GAME_MODES.SURVIVAL;
+    this.paddle.reset();
+    this.paddle.lives = 3;
+    this.score = 0;
+    this.combo = 0;
+    this.maxCombo = 0;
+    this.survivalTime = 0;
+    this.survivalWave = 1;
+    this.survivalWaveTimer = 0;
+    this.survivalWaveInterval = 540; // 9 seconds
+    this.dangerAlert = false;
+
+    this.balls = [new Ball(this.paddle.x + this.paddle.w / 2, this.paddle.y - 14, true)];
+    this.powerups = [];
+    this.bricks = [];
+
+    // Spawn 4 initial rows for survival
+    const cols = 13;
+    const paddingX = 14;
+    const paddingY = 8;
+    const brickW = (this.bounds.w - (cols - 1) * paddingX) / cols;
+    const brickH = 34;
+
+    for (let r = 0; r < 4; r++) {
+      for (let c = 0; c < cols; c++) {
+        let type = BRICK_TYPES.NORMAL;
+        const rand = Math.random();
+        if (rand < 0.12) type = BRICK_TYPES.AREA_BLAST;
+        else if (rand < 0.20) type = BRICK_TYPES.GOLD;
+        else if (rand < 0.26) type = BRICK_TYPES.LUCKY_WHEEL;
+        else if (rand < 0.30) type = BRICK_TYPES.LIFE_UP;
+
+        const bx = this.bounds.x + c * (brickW + paddingX);
+        const by = this.bounds.y + 40 + r * (brickH + paddingY);
+        this.bricks.push(new Brick(bx, by, brickW, brickH, type, r, c));
+      }
+    }
+
+    this.state = GAME_STATES.PLAYING;
+    sounds.playBgm(3);
+    this.particles.addFloatingText('SURVIVAL MODE: DEFEND THE LINE!', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2, '#ef4444');
+  }
+
+  spawnSurvivalTopRow() {
+    const cols = 13;
+    const paddingX = 14;
+    const brickW = (this.bounds.w - (cols - 1) * paddingX) / cols;
+    const brickH = 34;
+
+    for (let c = 0; c < cols; c++) {
+      let type = BRICK_TYPES.NORMAL;
+      const rand = Math.random();
+      if (rand < 0.14) type = BRICK_TYPES.AREA_BLAST;
+      else if (rand < 0.22) type = BRICK_TYPES.GOLD;
+      else if (rand < 0.28) type = BRICK_TYPES.LUCKY_WHEEL;
+      else if (rand < 0.34) type = BRICK_TYPES.PUSH;
+      else if (rand < 0.37) type = BRICK_TYPES.FALL_BOMB;
+
+      const bx = this.bounds.x + c * (brickW + paddingX);
+      const by = this.bounds.y + 40;
+      this.bricks.push(new Brick(bx, by, brickW, brickH, type, 0, c));
+    }
+  }
+
+  async triggerSurvivalBreach() {
+    sounds.stopBgm();
+    sounds.playExplosion();
+    this.particles.triggerScreenShake(26);
+    this.state = GAME_STATES.GAMEOVER;
+    this.showToast('💀 DANGER LINE BREACHED! Defense collapsed.', 'error');
+    if (api.isLoggedIn()) {
+      await api.submitScore(this.score, this.survivalWave, this.maxCombo);
+    }
   }
 
   loadMap(level) {
@@ -179,13 +305,31 @@ class Game {
       this.paddle.setLength('NORMAL');
 
       if (this.paddle.lives <= 0) {
-        this.state = GAME_STATES.GAMEOVER;
-        sounds.stopBgm();
-        sounds.playTone(180, 0.4, 'sawtooth', 60);
-        if (api.isLoggedIn()) {
-          const res = await api.submitScore(this.score, this.currentLevel, this.maxCombo);
-          if (res) {
-            this.showToast(`📊 Score ${this.score} recorded to Cloud!`, 'info');
+        if (this.mode === GAME_MODES.SURVIVAL) {
+          this.state = GAME_STATES.GAMEOVER;
+          sounds.stopBgm();
+          sounds.playTone(180, 0.4, 'sawtooth', 60);
+          if (api.isLoggedIn()) {
+            await api.submitScore(this.score, this.survivalWave, this.maxCombo);
+          }
+        } else {
+          // 3-Retries System in Campaign Mode
+          if (this.retriesLeft > 1) {
+            this.retriesLeft--;
+            this.state = GAME_STATES.RETRY;
+            sounds.stopBgm();
+            sounds.playTone(220, 0.3, 'sawtooth', 120);
+          } else {
+            this.retriesLeft = 0;
+            this.state = GAME_STATES.GAMEOVER;
+            sounds.stopBgm();
+            sounds.playTone(180, 0.4, 'sawtooth', 60);
+            if (api.isLoggedIn()) {
+              const res = await api.submitScore(this.score, this.currentLevel, this.maxCombo);
+              if (res) {
+                this.showToast(`📊 Score ${this.score.toLocaleString()} recorded to Cloud!`, 'info');
+              }
+            }
           }
         }
       } else {
@@ -219,7 +363,7 @@ class Game {
     brick.takeHit();
     sounds.playBrickHit(brick.type);
 
-    // CRITICAL FIX: Bombs and Area Blast explode immediately on bullet OR ball hit!
+    // Bombs and Area Blast explode immediately on bullet OR ball hit!
     if (brick.type === BRICK_TYPES.AREA_BLAST || brick.type === BRICK_TYPES.FALL_BOMB) {
       this.triggerAreaBlast(brick);
     }
@@ -306,7 +450,7 @@ class Game {
         break;
       case POWERUP_TYPES.SHOT:
         this.paddle.enableShooting();
-        this.particles.addFloatingText('LASER GUNS! 🔫', this.paddle.x + this.paddle.w / 2, this.paddle.y - 20, '#ef4444');
+        this.particles.addFloatingText('LASER GUNS! ⚡', this.paddle.x + this.paddle.w / 2, this.paddle.y - 20, '#ef4444');
         break;
       case POWERUP_TYPES.FALL_BOOM:
         this.triggerFallBoom();
@@ -314,7 +458,7 @@ class Game {
         break;
       case POWERUP_TYPES.GOLD:
         this.score += 500;
-        this.particles.addFloatingText('+500 GOLD 💰', this.paddle.x + this.paddle.w / 2, this.paddle.y - 20, '#eab308');
+        this.particles.addFloatingText('+500 GOLD ⭐', this.paddle.x + this.paddle.w / 2, this.paddle.y - 20, '#eab308');
         break;
     }
   }
@@ -339,21 +483,59 @@ class Game {
       if (this.comboTimer <= 0) this.combo = 0;
     }
 
-    // Dynamic Bricks
-    if (this.currentLevel >= 4 && this.frameCount % 24 === 0) {
-      const shift = Math.sin(this.frameCount * 0.05) * 1.5;
-      for (const b of this.bricks) {
-        if (!b.destroyed && b.type === BRICK_TYPES.PUSH) {
-          b.x += shift;
+    // SURVIVAL MODE PROGRESSION
+    if (this.mode === GAME_MODES.SURVIVAL) {
+      this.survivalTime++;
+      this.survivalWaveTimer++;
+
+      if (this.survivalWaveTimer >= this.survivalWaveInterval) {
+        this.survivalWaveTimer = 0;
+        this.survivalWave++;
+        this.survivalWaveInterval = Math.max(300, 540 - this.survivalWave * 15);
+
+        // Push existing bricks down
+        for (const b of this.bricks) {
+          if (!b.destroyed) {
+            b.y += 42;
+          }
+        }
+
+        // Check Danger Line breach
+        for (const b of this.bricks) {
+          if (!b.destroyed && b.y + b.h >= this.dangerLineY) {
+            this.triggerSurvivalBreach();
+            return;
+          }
+        }
+
+        // Spawn new top row
+        this.spawnSurvivalTopRow();
+
+        sounds.playAlarm();
+        this.particles.triggerScreenShake(10);
+        this.particles.addFloatingText(`WAVE ${this.survivalWave} DESCENT! ⚠`, CANVAS_WIDTH / 2, this.dangerLineY - 40, '#f97316');
+        this.score += this.survivalWave * 200;
+      }
+
+      // Check alert distance
+      this.dangerAlert = this.bricks.some(b => !b.destroyed && b.y + b.h >= this.dangerLineY - 55);
+    } else {
+      // CAMPAIGN MODE: Dynamic Bricks on higher levels
+      if (this.currentLevel >= 4 && this.frameCount % 24 === 0) {
+        const shift = Math.sin(this.frameCount * 0.05) * 1.5;
+        for (const b of this.bricks) {
+          if (!b.destroyed && b.type === BRICK_TYPES.PUSH) {
+            b.x += shift;
+          }
         }
       }
-    }
-    if (this.currentLevel >= 7 && this.frameCount % 360 === 0) {
-      for (const b of this.bricks) {
-        if (!b.destroyed) {
-          b.y += 6;
-          if (b.y + b.h >= this.paddle.y) {
-            this.handleBallLost(this.balls[0] || null);
+      if (this.currentLevel >= 7 && this.frameCount % 360 === 0) {
+        for (const b of this.bricks) {
+          if (!b.destroyed) {
+            b.y += 6;
+            if (b.y + b.h >= this.paddle.y) {
+              this.handleBallLost(this.balls[0] || null);
+            }
           }
         }
       }
@@ -410,40 +592,68 @@ class Game {
 
     this.particles.update();
 
+    // Check completion condition
     const remainingBreakable = this.bricks.filter(b => !b.destroyed && !b.isImmortal()).length;
     if (remainingBreakable === 0) {
-      this.nextLevel();
+      if (this.mode === GAME_MODES.SURVIVAL) {
+        // Clear bonus in survival mode and spawn fresh waves
+        this.score += 1500;
+        this.survivalWave++;
+        this.particles.addFloatingText('WAVE CLEAR! +1,500 PTS ⭐', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2, '#fde047');
+        for (let r = 0; r < 3; r++) {
+          this.spawnSurvivalTopRow();
+        }
+      } else {
+        this.nextLevel();
+      }
     }
   }
 
   renderHUD() {
     const ctx = this.ctx;
     ctx.save();
-    ctx.fillStyle = 'rgba(15, 23, 42, 0.75)';
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
     ctx.fillRect(0, 0, CANVAS_WIDTH, 50);
 
     ctx.fillStyle = '#f8fafc';
-    ctx.font = 'bold 20px "Courier New", monospace';
+    ctx.font = 'bold 19px "Courier New", monospace';
     ctx.textAlign = 'left';
-    ctx.fillText(`SCORE: ${this.score}`, 35, 32);
+    ctx.fillText(`SCORE: ${this.score.toLocaleString()}`, 35, 32);
 
-    ctx.fillStyle = '#38bdf8';
     ctx.textAlign = 'center';
-    ctx.fillText(`LEVEL ${this.currentLevel} / 20`, CANVAS_WIDTH / 2, 32);
+    if (this.mode === GAME_MODES.SURVIVAL) {
+      ctx.fillStyle = '#f97316';
+      ctx.fillText(`SURVIVAL | WAVE ${this.survivalWave} | ⏱ ${formatTime(this.survivalTime)}`, CANVAS_WIDTH / 2, 32);
+    } else {
+      ctx.fillStyle = '#38bdf8';
+      ctx.fillText(`LEVEL ${this.currentLevel} / 20`, CANVAS_WIDTH / 2, 32);
+    }
 
     ctx.textAlign = 'right';
+    let statusText = '';
+    if (this.mode === GAME_MODES.CAMPAIGN) {
+      statusText += `RETRIES: ${this.retriesLeft}/3   `;
+    }
     let hearts = '';
     for (let i = 0; i < Math.min(5, this.paddle.lives); i++) hearts += '❤️ ';
     if (this.paddle.lives > 5) hearts += `+${this.paddle.lives - 5}`;
     ctx.fillStyle = '#f43f5e';
-    ctx.fillText(`LIVES: ${hearts}`, CANVAS_WIDTH - 35, 32);
+    ctx.fillText(`${statusText}LIVES: ${hearts}`, CANVAS_WIDTH - 35, 32);
 
     if (this.combo >= 2) {
       ctx.fillStyle = '#ec4899';
       ctx.font = 'bold 16px "Courier New", monospace';
       ctx.textAlign = 'left';
-      ctx.fillText(`🔥 STREAK: ${this.combo}x`, 240, 32);
+      ctx.fillText(`🔥 ${this.combo}x STREAK`, 260, 32);
     }
+
+    if (this.dangerAlert && this.mode === GAME_MODES.SURVIVAL) {
+      ctx.fillStyle = '#ef4444';
+      ctx.font = 'bold 15px "Courier New", monospace';
+      ctx.textAlign = 'left';
+      ctx.fillText('🚨 HAZARD ALERT!', 420, 32);
+    }
+
     ctx.restore();
   }
 
@@ -462,9 +672,9 @@ class Game {
     ctx.save();
     this.particles.applyShake(ctx);
 
-    ctx.fillStyle = 'rgba(10, 15, 30, 0.7)';
+    ctx.fillStyle = 'rgba(10, 15, 30, 0.72)';
     ctx.fillRect(this.bounds.x, this.bounds.y, this.bounds.w, this.bounds.h);
-    ctx.strokeStyle = '#38bdf844';
+    ctx.strokeStyle = this.dangerAlert ? '#ef444488' : '#38bdf844';
     ctx.lineWidth = 2;
     ctx.strokeRect(this.bounds.x, this.bounds.y, this.bounds.w, this.bounds.h);
 
@@ -474,6 +684,26 @@ class Game {
       this.paddle.render(ctx);
       for (const ball of this.balls) ball.render(ctx);
       this.particles.render(ctx);
+
+      // Render Danger Line in Survival Mode
+      if (this.mode === GAME_MODES.SURVIVAL) {
+        ctx.save();
+        const pulse = (Math.sin(this.frameCount * 0.1) + 1) / 2;
+        ctx.strokeStyle = this.dangerAlert ? `rgba(239, 68, 68, ${0.7 + pulse * 0.3})` : 'rgba(239, 68, 68, 0.6)';
+        ctx.lineWidth = this.dangerAlert ? 3 : 2;
+        ctx.setLineDash([12, 6]);
+        ctx.beginPath();
+        ctx.moveTo(this.bounds.x, this.dangerLineY);
+        ctx.lineTo(this.bounds.x + this.bounds.w, this.dangerLineY);
+        ctx.stroke();
+
+        ctx.setLineDash([]);
+        ctx.fillStyle = this.dangerAlert ? '#ef4444' : 'rgba(239, 68, 68, 0.85)';
+        ctx.font = 'bold 12px "Courier New", monospace';
+        ctx.textAlign = 'right';
+        ctx.fillText('⚠ DANGER LINE ⚠', this.bounds.x + this.bounds.w - 15, this.dangerLineY - 6);
+        ctx.restore();
+      }
 
       // Launch hint if ball is attached to paddle
       if (this.balls.some(b => b.isAttached)) {
@@ -491,14 +721,17 @@ class Game {
       this.renderHUD();
 
       if (this.state === GAME_STATES.PAUSE) {
-        this.renderOverlay('PAUSED', 'Press P or Click to Resume', '#38bdf8');
+        this.renderPauseOverlay();
       }
+    } else if (this.state === GAME_STATES.RETRY) {
+      ctx.restore();
+      this.renderRetryOverlay();
     } else if (this.state === GAME_STATES.GAMEOVER) {
       ctx.restore();
-      this.renderOverlay('GAME OVER', `Final Score: ${this.score} | Click to Restart`, '#ef4444');
+      this.renderGameOverOverlay();
     } else if (this.state === GAME_STATES.VICTORY) {
       ctx.restore();
-      this.renderOverlay('VICTORY!', `Congratulations! Master Score: ${this.score}`, '#eab308');
+      this.renderVictoryOverlay();
     } else if (this.state === GAME_STATES.MENU) {
       ctx.restore();
       this.renderMenu();
@@ -511,24 +744,30 @@ class Game {
   renderMenu() {
     const ctx = this.ctx;
     ctx.save();
-    ctx.fillStyle = 'rgba(10, 15, 30, 0.85)';
+    ctx.fillStyle = 'rgba(10, 15, 30, 0.88)';
     ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
     ctx.textAlign = 'center';
     ctx.fillStyle = '#38bdf8';
-    ctx.font = 'bold 72px "Courier New", monospace';
+    ctx.font = 'bold 68px "Courier New", monospace';
     ctx.shadowColor = '#0284c7';
-    ctx.shadowBlur = 25;
-    ctx.fillText('ARKANOID', CANVAS_WIDTH / 2, 220);
+    ctx.shadowBlur = 24;
+    ctx.fillText('ARKANOID', CANVAS_WIDTH / 2, 200);
 
-    ctx.font = '22px "Courier New", monospace';
+    ctx.font = '20px "Courier New", monospace';
     ctx.fillStyle = '#94a3b8';
-    ctx.fillText('Online Web & Database Edition', CANVAS_WIDTH / 2, 270);
+    ctx.shadowBlur = 0;
+    ctx.fillText('Online Web & Database Edition', CANVAS_WIDTH / 2, 245);
 
-    this.drawButton(CANVAS_WIDTH / 2 - 130, 340, 260, 55, 'START GAME', '#10b981');
-    this.drawButton(CANVAS_WIDTH / 2 - 130, 415, 260, 55, 'SELECT LEVEL', '#3b82f6');
-    this.drawButton(CANVAS_WIDTH / 2 - 130, 490, 260, 55, 'LEADERBOARD', '#eab308');
-    this.drawButton(CANVAS_WIDTH / 2 - 130, 565, 260, 55, 'HOW TO PLAY', '#8b5cf6');
+    const btnW = 320;
+    const btnH = 50;
+    const btnX = CANVAS_WIDTH / 2 - btnW / 2;
+
+    this.drawButton(btnX, 290, btnW, btnH, 'CAMPAIGN (20 LEVELS)', '#10b981');
+    this.drawButton(btnX, 355, btnW, btnH, 'SURVIVAL MODE (ENDLESS)', '#ef4444');
+    this.drawButton(btnX, 420, btnW, btnH, 'SELECT LEVEL', '#0284c7');
+    this.drawButton(btnX, 485, btnW, btnH, 'LEADERBOARD', '#eab308');
+    this.drawButton(btnX, 550, btnW, btnH, 'HOW TO PLAY', '#8b5cf6');
 
     ctx.restore();
   }
@@ -582,23 +821,127 @@ class Game {
     ctx.restore();
   }
 
-  renderOverlay(title, subtitle, color) {
+  renderRetryOverlay() {
     const ctx = this.ctx;
     ctx.save();
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
+    ctx.fillStyle = 'rgba(10, 15, 30, 0.88)';
     ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
     ctx.textAlign = 'center';
-    ctx.fillStyle = color;
-    ctx.font = 'bold 64px "Courier New", monospace';
-    ctx.shadowColor = color;
+    ctx.fillStyle = '#f97316';
+    ctx.font = 'bold 56px "Courier New", monospace';
+    ctx.shadowColor = '#ea580c';
     ctx.shadowBlur = 20;
-    ctx.fillText(title, CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 - 20);
+    ctx.fillText('ATTEMPT FAILED!', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 - 80);
 
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = '#38bdf8';
+    ctx.font = 'bold 26px "Courier New", monospace';
+    ctx.fillText(`CONTINUES REMAINING: ${this.retriesLeft} of ${this.maxRetries}`, CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 - 20);
+
+    ctx.fillStyle = '#fef08a';
+    ctx.font = '20px "Courier New", monospace';
+    ctx.fillText(`Score Preserved: ${this.score.toLocaleString()} pts`, CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 25);
+
+    const btnW = 280;
+    const btnH = 55;
+    this.drawButton(CANVAS_WIDTH / 2 - btnW / 2, CANVAS_HEIGHT / 2 + 70, btnW, btnH, 'CONTINUE LEVEL', '#10b981');
+    this.drawButton(CANVAS_WIDTH / 2 - btnW / 2, CANVAS_HEIGHT / 2 + 140, btnW, btnH, 'MAIN MENU', '#64748b');
+
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = '16px "Courier New", monospace';
+    ctx.fillText('Press SPACE to Continue or M for Menu', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 225);
+
+    ctx.restore();
+  }
+
+  renderGameOverOverlay() {
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+    ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#ef4444';
+    ctx.font = 'bold 64px "Courier New", monospace';
+    ctx.shadowColor = '#ef4444';
+    ctx.shadowBlur = 22;
+
+    if (this.mode === GAME_MODES.SURVIVAL) {
+      ctx.fillText('SURVIVAL TERMINATED', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 - 70);
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = '#f8fafc';
+      ctx.font = '22px "Courier New", monospace';
+      ctx.fillText(`Waves Cleared: ${this.survivalWave} | Time Survived: ${formatTime(this.survivalTime)}`, CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 - 10);
+      ctx.fillStyle = '#fde047';
+      ctx.fillText(`Final Survival Score: ${this.score.toLocaleString()} pts`, CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 30);
+    } else {
+      ctx.fillText('GAME OVER', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 - 70);
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = '#f8fafc';
+      ctx.font = '22px "Courier New", monospace';
+      ctx.fillText(`All 3 Continues Exhausted | Reached Level ${this.currentLevel}`, CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 - 10);
+      ctx.fillStyle = '#fde047';
+      ctx.fillText(`Final Campaign Score: ${this.score.toLocaleString()} pts`, CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 30);
+    }
+
+    const btnW = 280;
+    const btnH = 50;
+    this.drawButton(CANVAS_WIDTH / 2 - btnW / 2, CANVAS_HEIGHT / 2 + 75, btnW, btnH, 'PLAY AGAIN', '#10b981');
+    this.drawButton(CANVAS_WIDTH / 2 - btnW / 2, CANVAS_HEIGHT / 2 + 140, btnW, btnH, 'MAIN MENU', '#64748b');
+
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = '16px "Courier New", monospace';
+    ctx.fillText('Press SPACE to Play Again or M for Menu', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 215);
+
+    ctx.restore();
+  }
+
+  renderVictoryOverlay() {
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+    ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#eab308';
+    ctx.font = 'bold 64px "Courier New", monospace';
+    ctx.shadowColor = '#eab308';
+    ctx.shadowBlur = 24;
+    ctx.fillText('🏆 VICTORY! 🏆', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 - 70);
+
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = '#f8fafc';
     ctx.font = '22px "Courier New", monospace';
+    ctx.fillText('You conquered all 20 levels of Arkanoid!', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 - 10);
+    ctx.fillStyle = '#38bdf8';
+    ctx.fillText(`Master Score: ${this.score.toLocaleString()} pts`, CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 30);
+
+    const btnW = 280;
+    const btnH = 50;
+    this.drawButton(CANVAS_WIDTH / 2 - btnW / 2, CANVAS_HEIGHT / 2 + 75, btnW, btnH, 'PLAY AGAIN', '#10b981');
+    this.drawButton(CANVAS_WIDTH / 2 - btnW / 2, CANVAS_HEIGHT / 2 + 140, btnW, btnH, 'MAIN MENU', '#64748b');
+
+    ctx.restore();
+  }
+
+  renderPauseOverlay() {
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+    ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#38bdf8';
+    ctx.font = 'bold 56px "Courier New", monospace';
+    ctx.shadowColor = '#0284c7';
+    ctx.shadowBlur = 18;
+    ctx.fillText('PAUSED', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 - 20);
+
+    ctx.font = '20px "Courier New", monospace';
     ctx.fillStyle = '#f8fafc';
     ctx.shadowBlur = 0;
-    ctx.fillText(subtitle, CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 45);
+    ctx.fillText('Press P or Click to Resume', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 35);
     ctx.restore();
   }
 
@@ -617,7 +960,6 @@ class Game {
         this.keys.right = true;
       } else if (e.key === ' ' || e.key === 'Spacebar') {
         if (this.state === GAME_STATES.PLAYING) {
-          // Launch attached balls or fire laser
           const attached = this.balls.filter(b => b.isAttached);
           if (attached.length > 0) {
             attached.forEach(b => b.launch(this.paddle.dx));
@@ -625,12 +967,23 @@ class Game {
           } else if (this.paddle.canShoot) {
             this.paddle.fire(sounds);
           }
+        } else if (this.state === GAME_STATES.RETRY) {
+          this.retryCurrentLevel();
         } else if (this.state === GAME_STATES.GAMEOVER || this.state === GAME_STATES.VICTORY) {
-          this.startLevel(1);
+          if (this.mode === GAME_MODES.SURVIVAL) {
+            this.startSurvivalMode();
+          } else {
+            this.startCampaign(1);
+          }
         }
       } else if (e.key === 'p' || e.key === 'P') {
         if (this.state === GAME_STATES.PLAYING) this.state = GAME_STATES.PAUSE;
         else if (this.state === GAME_STATES.PAUSE) this.state = GAME_STATES.PLAYING;
+      } else if (e.key === 'm' || e.key === 'M' || e.key === 'Escape') {
+        if (this.state === GAME_STATES.RETRY || this.state === GAME_STATES.GAMEOVER || this.state === GAME_STATES.VICTORY || this.state === GAME_STATES.PAUSE) {
+          this.state = GAME_STATES.MENU;
+          sounds.stopBgm();
+        }
       }
     });
 
@@ -651,11 +1004,14 @@ class Game {
       const y = (e.clientY - rect.top) * scaleY;
 
       if (this.state === GAME_STATES.MENU) {
-        if (x >= 470 && x <= 730) {
-          if (y >= 340 && y <= 395) this.startLevel(1);
-          else if (y >= 415 && y <= 470) this.state = GAME_STATES.PICK_LEVEL;
-          else if (y >= 490 && y <= 545) this.openLeaderboard();
-          else if (y >= 565 && y <= 620) this.openTutorial();
+        const btnW = 320;
+        const btnX = CANVAS_WIDTH / 2 - btnW / 2;
+        if (x >= btnX && x <= btnX + btnW) {
+          if (y >= 290 && y <= 340) this.startCampaign(1);
+          else if (y >= 355 && y <= 405) this.startSurvivalMode();
+          else if (y >= 420 && y <= 470) this.state = GAME_STATES.PICK_LEVEL;
+          else if (y >= 485 && y <= 535) this.openLeaderboard();
+          else if (y >= 550 && y <= 600) this.openTutorial();
         }
       } else if (this.state === GAME_STATES.PICK_LEVEL) {
         if (x >= 500 && x <= 700 && y >= 600 && y <= 650) {
@@ -680,7 +1036,6 @@ class Game {
           }
         }
       } else if (this.state === GAME_STATES.PLAYING) {
-        // Launch ball or shoot
         const attached = this.balls.filter(b => b.isAttached);
         if (attached.length > 0) {
           attached.forEach(b => b.launch(this.paddle.dx));
@@ -690,8 +1045,30 @@ class Game {
         }
       } else if (this.state === GAME_STATES.PAUSE) {
         this.state = GAME_STATES.PLAYING;
+      } else if (this.state === GAME_STATES.RETRY) {
+        const btnW = 280;
+        const btnX = CANVAS_WIDTH / 2 - btnW / 2;
+        if (x >= btnX && x <= btnX + btnW) {
+          if (y >= CANVAS_HEIGHT / 2 + 70 && y <= CANVAS_HEIGHT / 2 + 125) {
+            this.retryCurrentLevel();
+          } else if (y >= CANVAS_HEIGHT / 2 + 140 && y <= CANVAS_HEIGHT / 2 + 195) {
+            this.state = GAME_STATES.MENU;
+          }
+        }
       } else if (this.state === GAME_STATES.GAMEOVER || this.state === GAME_STATES.VICTORY) {
-        this.startLevel(1);
+        const btnW = 280;
+        const btnX = CANVAS_WIDTH / 2 - btnW / 2;
+        if (x >= btnX && x <= btnX + btnW) {
+          if (y >= CANVAS_HEIGHT / 2 + 75 && y <= CANVAS_HEIGHT / 2 + 125) {
+            if (this.mode === GAME_MODES.SURVIVAL) {
+              this.startSurvivalMode();
+            } else {
+              this.startCampaign(1);
+            }
+          } else if (y >= CANVAS_HEIGHT / 2 + 140 && y <= CANVAS_HEIGHT / 2 + 190) {
+            this.state = GAME_STATES.MENU;
+          }
+        }
       }
     });
   }

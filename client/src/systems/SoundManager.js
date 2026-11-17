@@ -118,6 +118,10 @@ class SoundManager {
     });
   }
 
+  playAlarm() {
+    this.playTone(650, 0.14, 'square', 400);
+  }
+
   playTone(freq, duration, type = 'sine', slideTo = null) {
     if (this.muted) return;
     this.init();
