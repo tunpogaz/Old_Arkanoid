@@ -38,6 +38,11 @@ build/
 ### Mac OS ###
 .DS_Store
 
+### Node / Web Client ###
+node_modules/
+dist/
+.vite/
+
 # Temporary / OS compatibility
 D/
 D:/

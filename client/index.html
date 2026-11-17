@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Arkanoid - Online Edition</title>
+  <link rel="stylesheet" href="/src/style.css" />
+</head>
+<body>
+  <header>
+    <div class="logo">⚡ ARKANOID ONLINE</div>
+    <div class="user-panel">
+      <span id="userDisplay">👤 Guest (Offline)</span>
+      <button id="muteBtn" class="btn btn-secondary">🔊 Sound</button>
+      <button id="authBtn" class="btn">Login / Register</button>
+    </div>
+  </header>
+
+  <main class="game-container">
+    <canvas id="gameCanvas"></canvas>
+  </main>
+
+  <!-- Auth Modal -->
+  <div id="authModal" class="modal hidden">
+    <div class="modal-content">
+      <button class="close-modal">&times;</button>
+      <h2>AUTHENTICATION</h2>
+      <form id="authForm">
+        <div class="input-group">
+          <label for="authUsername">Username</label>
+          <input type="text" id="authUsername" required placeholder="Choose a username" autocomplete="username" />
+        </div>
+        <div class="input-group">
+          <label for="authPassword">Password</label>
+          <input type="password" id="authPassword" required placeholder="Password" autocomplete="current-password" />
+        </div>
+        <label class="checkbox-group">
+          <input type="checkbox" id="isRegisterCheck" />
+          <span>New player? Check here to Register</span>
+        </label>
+        <div id="authError" class="error-msg"></div>
+        <button type="submit" class="btn">Submit</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Leaderboard Modal -->
+  <div id="leaderboardModal" class="modal hidden">
+    <div class="modal-content" style="max-width: 650px;">
+      <button class="close-modal">&times;</button>
+      <h2>🏆 GLOBAL LEADERBOARD</h2>
+      <div id="leaderboardList"></div>
+    </div>
+  </div>
+
+  <!-- Tutorial Modal -->
+  <div id="tutorialModal" class="modal hidden">
+    <div class="modal-content">
+      <button class="close-modal">&times;</button>
+      <h2>HOW TO PLAY</h2>
+      <div class="tutorial-body">
+        <p><strong>Controls:</strong></p>
+        <ul>
+          <li><strong>Mouse:</strong> Move paddle smoothly by dragging/moving cursor</li>
+          <li><strong>A / D or Arrow Keys:</strong> Move paddle Left & Right</li>
+          <li><strong>Spacebar / Left Click:</strong> Fire lasers (when equipped) / Launch ball / Restart</li>
+          <li><strong>P:</strong> Pause / Resume game</li>
+        </ul>
+        <br />
+        <p><strong>Features:</strong></p>
+        <ul>
+          <li>Destroy all breakable bricks to clear the level (20 exciting levels!).</li>
+          <li>Collect power-ups: Multi-ball, Laser Cannons, Mega Ball, Nuke Bombs.</li>
+          <li>Maintain streaks to activate <strong>Combo Multipliers (x2, x3)</strong>!</li>
+          <li>Log in to save your personal best and compete on the global leaderboard.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
