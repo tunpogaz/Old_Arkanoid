@@ -763,8 +763,8 @@ class Game {
     const btnH = 50;
     const btnX = CANVAS_WIDTH / 2 - btnW / 2;
 
-    this.drawButton(btnX, 290, btnW, btnH, 'CAMPAIGN (20 LEVELS)', '#10b981');
-    this.drawButton(btnX, 355, btnW, btnH, 'SURVIVAL MODE (ENDLESS)', '#ef4444');
+    this.drawButton(btnX, 290, btnW, btnH, 'CAMPAIGN MODE', '#10b981');
+    this.drawButton(btnX, 355, btnW, btnH, 'SURVIVAL MODE', '#ef4444');
     this.drawButton(btnX, 420, btnW, btnH, 'SELECT LEVEL', '#0284c7');
     this.drawButton(btnX, 485, btnW, btnH, 'LEADERBOARD', '#eab308');
     this.drawButton(btnX, 550, btnW, btnH, 'HOW TO PLAY', '#8b5cf6');
@@ -796,7 +796,7 @@ class Game {
     ctx.fillStyle = '#38bdf8';
     ctx.font = 'bold 36px "Courier New", monospace';
     ctx.textAlign = 'center';
-    ctx.fillText(`SELECT LEVEL (Unlocked: ${this.unlockedLevel} / 20)`, CANVAS_WIDTH / 2, 100);
+    ctx.fillText(`SELECT LEVEL - UNLOCKED ${this.unlockedLevel} / 20`, CANVAS_WIDTH / 2, 100);
 
     const startX = 170;
     const startY = 150;
@@ -962,7 +962,7 @@ class Game {
         if (this.state === GAME_STATES.PLAYING) {
           const attached = this.balls.filter(b => b.isAttached);
           if (attached.length > 0) {
-            attached.forEach(b => b.launch(this.paddle.dx));
+            attached.forEach(b => b.launch(this.paddle));
             sounds.playTone(480, 0.1, 'triangle', 680);
           } else if (this.paddle.canShoot) {
             this.paddle.fire(sounds);
@@ -1038,7 +1038,7 @@ class Game {
       } else if (this.state === GAME_STATES.PLAYING) {
         const attached = this.balls.filter(b => b.isAttached);
         if (attached.length > 0) {
-          attached.forEach(b => b.launch(this.paddle.dx));
+          attached.forEach(b => b.launch(this.paddle));
           sounds.playTone(480, 0.1, 'triangle', 680);
         } else if (this.paddle.canShoot) {
           this.paddle.fire(sounds);
@@ -1081,7 +1081,7 @@ class Game {
       userDisplay.className = 'user-badge clickable';
       authBtn.textContent = 'Logout';
     } else {
-      userDisplay.textContent = '👤 Guest (Offline)';
+      userDisplay.textContent = '👤 Guest';
       userDisplay.className = 'user-badge';
       authBtn.textContent = 'Login / Register';
     }

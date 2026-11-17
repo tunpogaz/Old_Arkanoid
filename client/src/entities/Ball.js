@@ -4,26 +4,39 @@ export class Ball {
     this.r = this.defaultRadius;
     this.x = x;
     this.y = y;
-    this.baseSpeed = 7.0;
-    this.maxSpeed = 11.0;
+    this.baseSpeed = 7.5;
+    this.maxSpeed = 11.5;
     this.dx = 0;
     this.dy = 0;
     this.active = true;
-    this.isAttached = isAttached; // Sticks to paddle before launch
+    this.isAttached = isAttached;
     this.isBigger = false;
     this.bigTimer = 0;
     this.animTick = 0;
+    this.currentPaddle = null;
+    this.attachOffsetRatio = 0;
 
     this.img = new Image();
     this.img.src = '/assets/image/ballSkin1.png';
   }
 
-  launch(paddleSpeed = 0) {
+  getLaunchAngle(paddle = null) {
+    const pad = paddle || this.currentPaddle;
+    if (!pad) return 0;
+    if (pad.dx < 0) return -Math.PI * 0.22;
+    if (pad.dx > 0) return Math.PI * 0.22;
+    if (pad.lastDirection < 0) return -Math.PI * 0.12;
+    if (pad.lastDirection > 0) return Math.PI * 0.12;
+    return 0;
+  }
+
+  launch(paddle = null) {
     if (!this.isAttached) return;
     this.isAttached = false;
-    const initialDx = (paddleSpeed * 0.3) + (Math.random() > 0.5 ? 3.5 : -3.5);
-    this.dx = Math.max(-5, Math.min(5, initialDx));
-    this.dy = -this.baseSpeed;
+    const pad = paddle || this.currentPaddle;
+    const angle = this.getLaunchAngle(pad);
+    this.dx = this.baseSpeed * Math.sin(angle);
+    this.dy = -this.baseSpeed * Math.cos(angle);
   }
 
   setBigger() {
@@ -39,10 +52,12 @@ export class Ball {
 
   update(bounds, paddle, sounds, particles) {
     this.animTick++;
+    this.currentPaddle = paddle;
 
-    // If attached to paddle, follow paddle position
     if (this.isAttached) {
-      this.x = paddle.x + paddle.w / 2;
+      const targetRatio = paddle.dx < 0 ? -0.22 : paddle.dx > 0 ? 0.22 : (paddle.lastDirection * 0.10);
+      this.attachOffsetRatio += (targetRatio - this.attachOffsetRatio) * 0.2;
+      this.x = paddle.x + paddle.w / 2 + this.attachOffsetRatio * (paddle.w / 2);
       this.y = paddle.y - this.r - 2;
       return false;
     }
@@ -54,7 +69,6 @@ export class Ball {
       }
     }
 
-    // Emit trail particles
     if (particles && Math.random() < 0.65) {
       particles.createBallTrail(this.x, this.y, this.isBigger ? '#fbbf24' : '#60a5fa');
     }
@@ -62,12 +76,10 @@ export class Ball {
     this.x += this.dx;
     this.y += this.dy;
 
-    // Prevent ball from bouncing purely horizontally (anti-stuck)
     if (Math.abs(this.dy) < 2.0) {
       this.dy = this.dy >= 0 ? 2.2 : -2.2;
     }
 
-    // Bounds collision: Left & Right
     if (this.x - this.r <= bounds.x) {
       this.x = bounds.x + this.r;
       this.dx = Math.abs(this.dx);
@@ -78,14 +90,12 @@ export class Ball {
       if (sounds) sounds.playTone(360, 0.05, 'sine');
     }
 
-    // Bounds collision: Top
     if (this.y - this.r <= bounds.y) {
       this.y = bounds.y + this.r;
       this.dy = Math.abs(this.dy);
       if (sounds) sounds.playTone(360, 0.05, 'sine');
     }
 
-    // Paddle collision
     if (
       this.y + this.r >= paddle.y &&
       this.y - this.r <= paddle.y + paddle.h &&
@@ -97,7 +107,7 @@ export class Ball {
       const hitOffset = (this.x - paddleCenter) / (paddle.w / 2);
       const clampedHit = Math.max(-1, Math.min(1, hitOffset));
 
-      const maxAngle = Math.PI * 0.40; // ~72 degrees
+      const maxAngle = Math.PI * 0.40;
       const bounceAngle = clampedHit * maxAngle;
       const currentSpeed = Math.min(this.maxSpeed, Math.max(this.baseSpeed, Math.sqrt(this.dx * this.dx + this.dy * this.dy) * 1.02));
 
@@ -105,7 +115,6 @@ export class Ball {
       this.dy = -Math.abs(currentSpeed * Math.cos(bounceAngle));
       this.y = paddle.y - this.r - 1;
 
-      // Ensure vertical speed is never too shallow
       if (Math.abs(this.dy) < 2.5) {
         this.dy = -2.8;
       }
@@ -114,7 +123,6 @@ export class Ball {
       return true;
     }
 
-    // Fall out of bottom
     if (this.y - this.r > bounds.y + bounds.h) {
       this.active = false;
     }
@@ -123,7 +131,29 @@ export class Ball {
 
   render(ctx) {
     ctx.save();
-    // Render animated rotating ball using 16-frame spritesheet (360x360 per frame)
+
+    if (this.isAttached && this.currentPaddle) {
+      const angle = this.getLaunchAngle(this.currentPaddle);
+      const dirX = Math.sin(angle);
+      const dirY = -Math.cos(angle);
+
+      ctx.save();
+      for (let d = 20; d <= 120; d += 18) {
+        const px = this.x + dirX * d;
+        const py = this.y + dirY * d;
+        const alpha = 0.95 - (d / 140) * 0.75;
+        const dotR = 3.2 - (d / 140) * 1.6;
+
+        ctx.fillStyle = `rgba(56, 189, 248, ${alpha})`;
+        ctx.shadowColor = '#38bdf8';
+        ctx.shadowBlur = 8;
+        ctx.beginPath();
+        ctx.arc(px, py, dotR, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+
     if (this.img.complete && this.img.naturalWidth === 360 && this.img.naturalHeight === 5760) {
       const totalFrames = 16;
       const frameHeight = 360;
@@ -137,7 +167,6 @@ export class Ball {
         this.x - this.r, this.y - this.r, this.r * 2, this.r * 2
       );
     } else {
-      // High-quality vector glowing ball
       ctx.beginPath();
       ctx.arc(this.x, this.y, this.r, 0, Math.PI * 2);
       const grad = ctx.createRadialGradient(

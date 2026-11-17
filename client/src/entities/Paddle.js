@@ -11,6 +11,7 @@ export class Paddle {
     this.y = canvasHeight - 55;
     this.speed = 12;
     this.dx = 0;
+    this.lastDirection = 0;
     this.lives = 3;
     this.canShoot = false;
     this.shootTimer = 0;
@@ -24,6 +25,7 @@ export class Paddle {
     this.w = this.normalWidth;
     this.x = (this.canvasWidth - this.w) / 2;
     this.dx = 0;
+    this.lastDirection = 0;
     this.canShoot = false;
     this.bullets = [];
   }
@@ -52,10 +54,12 @@ export class Paddle {
 
   moveLeft() {
     this.dx = -this.speed;
+    this.lastDirection = -1;
   }
 
   moveRight() {
     this.dx = this.speed;
+    this.lastDirection = 1;
   }
 
   stop() {
