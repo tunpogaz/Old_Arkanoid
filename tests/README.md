@@ -9,7 +9,7 @@ cd client
 npm test
 ```
 
-Kỳ vọng: `TOTAL TESTS: 173`, `PASSED: 173`, `FAILED: 0`.
+Kỳ vọng: `TOTAL TESTS: 174`, `PASSED: 174`, `FAILED: 0`.
 
 Hoặc từ thư mục gốc:
 
@@ -60,7 +60,7 @@ Mở http://localhost:5173, sau đó:
 | Đường dẫn | Mục đích |
 | :--- | :--- |
 | `TEST_PLAN.md` | Kế hoạch 27 ca kiểm thử và tiêu chí nghiệm thu |
-| `automated/run-client-tests.js` | 173 kiểm tra logic game + entity |
+| `automated/run-client-tests.js` | 174 kiểm tra logic game + entity |
 | `automated/run-api-smoke.sh` | 24 kiểm tra REST API trên server thật |
 | `manual/QA_PANEL_CHECKLIST.md` | Checklist phím tắt QA panel |
 | `evidence/` | Ảnh chụp màn hình |

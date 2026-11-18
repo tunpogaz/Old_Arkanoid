@@ -37,5 +37,5 @@ Mở game → bấm **CAMPAIGN MODE** → bấm **T** để bật QA TESTER PANE
 ## Ghi chú
 
 - Nếu panel không hiện, kiểm tra focus đang ở ô nhập liệu (phím tắt bị chủ động bỏ qua khi gõ).
-- Phím **8** đã bị bỏ cùng cơ chế +500 vàng; gạch vàng vẫn đáng 300 điểm nhưng không rơi vật phẩm.
+- Phím **8** đã bị bỏ cùng cơ chế +500 vàng. Loại gạch vàng/coin cũng đã bị xóa: mọi ô từng là vàng nay là gạch thường 100 điểm, nên không còn viên gạch màu vàng nào trên bàn chơi.
 - Ghi lại ảnh chụp màn hình vào `tests/evidence/` nếu phát hiện lỗi.

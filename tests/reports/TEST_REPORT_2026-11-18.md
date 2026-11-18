@@ -2,7 +2,7 @@
 
 - **Ngày:** 2026-11-18
 - **Phạm vi:** toàn bộ client (game + QA panel), backend Spring Boot, tài liệu kiểm thử và hạ tầng test
-- **Kết luận nhanh:** tất cả tầng kiểm thử đều đạt (173 client + 11 backend + 24 API). Đã phát hiện và sửa **9 lỗi sản phẩm** trong game/backend cùng **1 vấn đề nghiêm trọng của bộ test cũ** (test "xanh giả"). Các đợt sau bổ sung Mega Ball xuyên gạch, menu tạm dừng, âm lượng 0–100%, sửa lỗi PUSH ở Survival, animation wave mượt, bộ đếm power-up và bỏ cơ chế +500 vàng.
+- **Kết luận nhanh:** tất cả tầng kiểm thử đều đạt (174 client + 11 backend + 24 API). Đã phát hiện và sửa **9 lỗi sản phẩm** trong game/backend cùng **1 vấn đề nghiêm trọng của bộ test cũ** (test "xanh giả"). Các đợt sau bổ sung Mega Ball xuyên gạch, menu tạm dừng, âm lượng 0–100%, sửa lỗi PUSH ở Survival, animation wave mượt, bộ đếm power-up, bỏ cơ chế +500 vàng và chuyển toàn bộ gạch vàng/coin thành gạch thường.
 
 ---
 
@@ -23,7 +23,7 @@
 
 | Tầng | Lệnh | Kết quả |
 | :--- | :--- | :--- |
-| Client automated | `cd client && npm test` | **173/173 PASS, 0 FAIL** |
+| Client automated | `cd client && npm test` | **174/174 PASS, 0 FAIL** |
 | Backend JUnit | `cd server && mvn test` | **11/11 PASS** (10 integration + 1 context load), BUILD SUCCESS |
 | REST API smoke (server thật) | `bash tests/automated/run-api-smoke.sh http://localhost:8080` | **24/24 PASS, FAILED: 0** |
 | Leaderboard nhiều người chơi | kiểm tra trực tiếp sau khi restart backend | **1 dòng/người chơi, đúng điểm cao nhất** |
@@ -34,14 +34,14 @@
 
 ## 3. Chi Tiết Theo Tầng
 
-### 3.1. Client — 173 kiểm tra tự động
+### 3.1. Client — 174 kiểm tra tự động
 
 Bộ test import **module thật** của game (không dùng mock cho logic), gồm 12 nhóm:
 
 1. **20 màn chơi & cụm domino** — đủ 20 level, dữ liệu gạch hợp lệ, cụm domino có gạch nổ.
 2. **GameRules dùng chung & chuẩn hóa URL API** — hằng số, `normalizeApiUrl`, biên màn chơi, clamp âm lượng.
 3. **x3 Multi-Ball** — dùng đúng helper `computeMultiBallSpawns` mà `main.js` gọi; kiểm tra góc quạt, giới hạn 18 bóng, bóng không trùng.
-4. **Power-up & tỷ lệ rơi 6%** — stub `Math.random` để kiểm tra xác định; đúng 7 loại sau khi bỏ vàng, nhãn không còn +500, gạch vàng 300 điểm nhưng không rơi vật phẩm, TODO tương lai còn đúng một dòng.
+4. **Power-up & tỷ lệ rơi 6%** — stub `Math.random` để kiểm tra xác định; đúng 7 loại sau khi bỏ vàng, nhãn không còn +500, loại gạch vàng bị xóa hoàn toàn, gạch thường (kể cả ô vàng cũ) đáng 100 điểm, TODO tương lai còn đúng một dòng.
 5. **Hệ 3 lượt / 2 lần tiếp tục** — `resolveAttemptFailure` trả `RETRY` rồi `GAMEOVER` đúng thứ tự.
 6. **Đường nguy hiểm survival** — biên cảnh báo và biên thua chính xác đến từng pixel.
 7. **Lan truyền domino thật** — `collectBlastTargets` đệ quy qua gạch nổ, chặn gạch bất tử/đã phá, không trùng mục tiêu.
@@ -197,15 +197,18 @@ Số liệu trình duyệt: `y 100 → 109.33 (sau 16 frame) → 142 (sau 51 fra
 - Reset khi mất mạng, REPLAY, đổi màn, về menu; đóng băng khi Pause; phím QA 1–6 đi qua đúng `applyPowerUp` thật.
 - Đo trình duyệt: pause 60 frame giữ nguyên `450`; chạy 120 frame còn `330`; chạy tiếp 600 frame xóa sạch 3 bộ đếm, paddle `140`, bóng `11`, `canShoot=false`.
 
-### 10.4. Bỏ cơ chế +500 vàng
+### 10.4. Bỏ cơ chế +500 vàng và xóa gạch vàng/coin
 
 - Xóa `GOLD` khỏi `POWERUP_TYPES`/`POWERUP_META`/ảnh, xóa case +500 và phím QA 8; debug panel còn "Phím 1 đến 7".
-- Gạch vàng vẫn 300 điểm nhưng `spawnPowerUp()` trả `null`; tỷ lệ 6% của gạch thường chia đều cho 7 loại.
-- Chỉ giữ đúng một TODO: `Tương lai: thêm lại nhặt vàng để mua skin paddle`. Không thêm hệ tiền tệ.
-- Đo trình duyệt: 300 lần rơi ngẫu nhiên chỉ ra 7 loại, không có `GOLD`; phím 8 không đổi điểm; không có lỗi/warning console.
+- Xóa hẳn loại gạch vàng: `BRICK_TYPES.GOLD`, sprite, màu dự phòng, mức điểm 300 và nhánh `spawnPowerUp()` đã bị gỡ khỏi `Brick.js`.
+- Chuyển **117 ô gạch vàng** trong `MapData.js` (cả 20 màn) thành gạch thường ID 1, đổi tên màn 3 thành "NEON PYRAMID"; bảng Legend ghi rõ ID 4 đã ngừng dùng. Mọi viên gạch trên bàn chơi giờ đều 100 điểm như nhau.
+- Xác suất spawn Survival bỏ nhánh vàng và dồn phần trăm đó về gạch thường (hàng đầu 22% gạch đặc biệt, hàng mới 29%), các loại còn lại giữ nguyên trọng số.
+- Tỷ lệ 6% của gạch thường chia đều cho 7 loại power-up. Không thêm hệ tiền tệ.
+- Chỉ giữ đúng một TODO: `Tương lai: thêm lại nhặt vàng để mua skin paddle`.
+- Đo trình duyệt: 300 lần rơi ngẫu nhiên chỉ ra 7 loại, không có `GOLD`; phím 8 không đổi điểm; không còn viên gạch màu vàng nào trong Campaign lẫn Survival; không có lỗi/warning console.
 
 ### 10.5. Kết quả kiểm thử đợt 3
 
-- `cd client && npm test`: **173/173 PASS, FAILED: 0**, exit code 0 (tăng 79 kiểm tra so với 94).
-- `npm run build`: thành công, 14 modules, JS 56.79 kB (gzip 16.65 kB).
-- Trình duyệt: wave mượt, PUSH lên đúng (kẹp trần 40px ở lần đầu do hàng trên ở y=100 rồi 0px khi sát trần), bộ đếm hiển thị/đếm lùi/đóng băng/hết hạn đúng, không còn vàng/phím 8, không có lỗi console.
+- `cd client && npm test`: **174/174 PASS, FAILED: 0**, exit code 0 (tăng 80 kiểm tra so với 94).
+- `npm run build`: thành công, 14 modules.
+- Trình duyệt: wave mượt, PUSH lên đúng (kẹp trần 40px ở lần đầu do hàng trên ở y=100 rồi 0px khi sát trần), bộ đếm hiển thị/đếm lùi/đóng băng/hết hạn đúng, không còn gạch vàng/phím 8, không có lỗi console.

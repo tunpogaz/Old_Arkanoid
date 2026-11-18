@@ -355,9 +355,8 @@ class Game {
         let type = BRICK_TYPES.NORMAL;
         const rand = Math.random();
         if (rand < 0.12) type = BRICK_TYPES.AREA_BLAST;
-        else if (rand < 0.20) type = BRICK_TYPES.GOLD;
-        else if (rand < 0.26) type = BRICK_TYPES.LUCKY_WHEEL;
-        else if (rand < 0.30) type = BRICK_TYPES.LIFE_UP;
+        else if (rand < 0.18) type = BRICK_TYPES.LUCKY_WHEEL;
+        else if (rand < 0.22) type = BRICK_TYPES.LIFE_UP;
 
         const bx = this.bounds.x + c * (brickW + paddingX);
         const by = this.bounds.y + 40 + r * (brickH + paddingY);
@@ -382,10 +381,9 @@ class Game {
       let type = BRICK_TYPES.NORMAL;
       const rand = Math.random();
       if (rand < 0.14) type = BRICK_TYPES.AREA_BLAST;
-      else if (rand < 0.22) type = BRICK_TYPES.GOLD;
-      else if (rand < 0.28) type = BRICK_TYPES.LUCKY_WHEEL;
-      else if (rand < 0.34) type = BRICK_TYPES.PUSH;
-      else if (rand < 0.37) type = BRICK_TYPES.FALL_BOMB;
+      else if (rand < 0.20) type = BRICK_TYPES.LUCKY_WHEEL;
+      else if (rand < 0.26) type = BRICK_TYPES.PUSH;
+      else if (rand < 0.29) type = BRICK_TYPES.FALL_BOMB;
 
       const bx = this.bounds.x + c * (brickW + paddingX);
       const finalY = this.bounds.y + 40 + rowIndex * (brickH + paddingY);

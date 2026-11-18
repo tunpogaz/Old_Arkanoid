@@ -58,17 +58,20 @@ async function runTestSuite() {
 
   let allMapsHave8x13 = true;
   let allCellIdsValid = true;
+  let usesRetiredGoldId = false;
   for (const map of LEVEL_MAPS) {
     if (map.length !== 8) allMapsHave8x13 = false;
     for (const row of map) {
       if (row.length !== 13) allMapsHave8x13 = false;
       for (const cell of row) {
         if (!Number.isInteger(cell) || cell < 0 || cell > 8) allCellIdsValid = false;
+        if (cell === 4) usesRetiredGoldId = true;
       }
     }
   }
   assert(allMapsHave8x13, 'All 20 level grids are strictly 8 rows by 13 columns');
   assert(allCellIdsValid, 'Every map cell uses a valid brick ID (0-8)');
+  assert(!usesRetiredGoldId, 'No level contains the retired gold/coin brick (ID 4)');
 
   const level1 = getMapByLevel(1);
   let areaBlastCount = 0;
@@ -172,9 +175,10 @@ async function runTestSuite() {
   const { BRICK_TYPES, Brick } = await import('../../client/src/entities/Brick.js');
 
   assertEqual(Object.keys(POWERUP_TYPES).length, 7, 'Exactly 7 PowerUp types are registered (gold removed)');
-  assertEqual(Object.keys(BRICK_TYPES).length, 9, 'Exactly 9 Brick IDs are defined (0-8)');
+  assertEqual(Object.keys(BRICK_TYPES).length, 8, 'Exactly 8 Brick IDs remain (gold ID retired)');
   assertEqual(POWERUP_TYPES.GOLD, undefined, 'GOLD is no longer a PowerUp type');
   assertEqual(POWERUP_META.GOLD, undefined, 'GOLD has no PowerUp meta/label');
+  assertEqual(BRICK_TYPES.GOLD, undefined, 'The gold/coin brick type is fully retired');
 
   const labels = Object.values(POWERUP_META).map(meta => meta.label);
   for (const expected of ['↔ WIDE', '>< MINI', 'x3 MULTI', '● MEGA', '❤️ +1 LIFE', '⚡ LASER', '💣 NUKE']) {
@@ -224,9 +228,8 @@ async function runTestSuite() {
     assertEqual(unluckyBrick.spawnPowerUp(), null, 'Real Brick.spawnPowerUp drops nothing above 6%');
 
     Math.random = () => 0.0;
-    const goldBrick = new Brick(0, 0, 75, 34, BRICK_TYPES.GOLD, 0, 0);
-    assertEqual(goldBrick.points, 300, 'Gold bricks are still worth 300 points');
-    assertEqual(goldBrick.spawnPowerUp(), null, 'Gold bricks never drop a +500 pickup anymore');
+    const formerGoldBrick = new Brick(0, 0, 75, 34, BRICK_TYPES.NORMAL, 0, 0);
+    assertEqual(formerGoldBrick.points, 100, 'Former gold cells are now ordinary 100-point bricks');
   } finally {
     Math.random = originalRandom;
   }

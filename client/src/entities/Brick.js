@@ -6,7 +6,6 @@ export const BRICK_TYPES = {
   NORMAL: 1,
   IMMORTAL: 2,
   LIFE_UP: 3,
-  GOLD: 4,
   FALL_BOMB: 5,
   AREA_BLAST: 6,
   LUCKY_WHEEL: 7,
@@ -17,7 +16,6 @@ const BRICK_SPRITES = {
   1: '/assets/image/normal.png',
   2: '/assets/image/immortal.png',
   3: '/assets/image/lifeup.png',
-  4: '/assets/image/gold.png',
   5: '/assets/image/fallBomb.png',
   6: '/assets/image/areaBlast.png',
   7: '/assets/image/luckywheel.png',
@@ -35,7 +33,6 @@ const BRICK_COLORS = {
   1: '#3b82f6',
   2: '#64748b',
   3: '#ec4899',
-  4: '#eab308',
   5: '#ef4444',
   6: '#f97316',
   7: '#a855f7',
@@ -53,7 +50,7 @@ export class Brick {
     this.col = col;
     this.hp = type === BRICK_TYPES.IMMORTAL ? 999999 : 1;
     this.destroyed = false;
-    this.points = type === BRICK_TYPES.GOLD ? 300 : 100;
+    this.points = 100;
 
     // Smooth vertical animation (Survival waves and PUSH bricks).
     this.targetY = y;
@@ -122,10 +119,6 @@ export class Brick {
   spawnPowerUp() {
     if (this.type === BRICK_TYPES.LIFE_UP) {
       return new PowerUp(this.x + this.w / 2, this.y + this.h / 2, POWERUP_TYPES.LIFE_UP);
-    }
-    if (this.type === BRICK_TYPES.GOLD) {
-      // Gold bricks keep their 300 points but no longer drop a +500 pickup.
-      return null;
     }
     if (this.type === BRICK_TYPES.FALL_BOMB) {
       return new PowerUp(this.x + this.w / 2, this.y + this.h / 2, POWERUP_TYPES.FALL_BOOM);

@@ -11,7 +11,7 @@ tests/
 ├── TEST_PLAN.md                     # Tài liệu này (27 ca kiểm thử + tiêu chí nghiệm thu)
 ├── README.md                        # Hướng dẫn chạy nhanh cho QA
 ├── automated/
-│   ├── run-client-tests.js          # 173 kiểm tra tự động (game rules + entities)
+│   ├── run-client-tests.js          # 174 kiểm tra tự động (game rules + entities)
 │   └── run-api-smoke.sh             # Smoke test REST API thật (curl + jq)
 ├── manual/
 │   └── QA_PANEL_CHECKLIST.md        # Checklist thao tác QA panel trong game
@@ -26,7 +26,7 @@ tests/
 
 ## 1. Phương Thức Kiểm Thử Tự Động
 
-### 1.1. Client + luật chơi dùng chung (173 kiểm tra)
+### 1.1. Client + luật chơi dùng chung (174 kiểm tra)
 
 ```bash
 cd client
@@ -43,10 +43,10 @@ Bộ test import **module sản phẩm thật** (`GameRules.js`, `MapData.js`, `
 
 | Nhóm | Nội dung | Số kiểm tra |
 | :--- | :--- | :--- |
-| 1 | 20 màn chơi: kích thước 8x13, ID gạch hợp lệ, cụm Domino màn 1, boss màn 20 | 6 |
+| 1 | 20 màn chơi: kích thước 8x13, ID gạch hợp lệ, không còn ID vàng 4, cụm Domino màn 1, boss màn 20 | 7 |
 | 2 | Hằng số luật chơi + chuẩn hóa URL REST API (kể cả `/api/`) + âm lượng | 18 |
 | 3 | Nhân 3 bóng: 1→3, 2→6, 9→18, chặn ở 18, bảo toàn tốc độ/hướng | 9 |
-| 4 | 7 PowerUp (đã bỏ vàng), nhãn, kích thước viên nhộng 72x24, tỷ lệ rơi 6%, gạch vàng không rơi vật phẩm | 25 |
+| 4 | 7 PowerUp (đã bỏ vàng), nhãn, kích thước viên nhộng 72x24, tỷ lệ rơi 6%, gạch thường 100 điểm, loại gạch vàng đã bị xóa | 25 |
 | 5 | Chu trình 3 lượt: 3→2 RETRY→1 RETRY→0 GAME OVER | 7 |
 | 6 | Danger Line: chạm/vượt vạch, ngưỡng cảnh báo 55px, bỏ qua gạch đã phá | 8 |
 | 7 | Domino chain lan truyền qua bom, không phá gạch bất tử, không lặp | 8 |
@@ -56,7 +56,7 @@ Bộ test import **module sản phẩm thật** (`GameRules.js`, `MapData.js`, `
 | 11 | Bộ đếm power-up: thời lượng, làm mới, đếm lùi, đóng băng, nhấp nháy giây cuối, WIDE/MINI loại trừ nhau | 28 |
 | 12 | Hết hạn trả paddle 140px/bóng 11px/tắt laser; súng tự bắn theo timer | 9 |
 
-Kỳ vọng: `TOTAL TESTS: 173`, `PASSED: 173`, `FAILED: 0`, exit code 0.
+Kỳ vọng: `TOTAL TESTS: 174`, `PASSED: 174`, `FAILED: 0`, exit code 0.
 
 ### 1.2. Backend Spring Boot
 
@@ -104,7 +104,7 @@ Mở game trên trình duyệt, bấm **T** để bật/tắt bảng **QA TESTER
 | **A / D / ← / →** | Di chuyển paddle |
 | **Space / Click trái** | Phóng bóng hoặc bắn laser |
 
-Phím **1–6** kích hoạt bộ đếm giống hệt nhặt vật phẩm thật: HUD hiện đồng hồ tròn + số giây ở góc trên phải, nhấp nháy giây cuối và tự gỡ hiệu ứng khi về 0. Nhấn lại cùng loại chỉ làm mới thời gian, không cộng dồn. Phím **8** đã bị bỏ cùng cơ chế +500 vàng.
+Phím **1–6** kích hoạt bộ đếm giống hệt nhặt vật phẩm thật: HUD hiện đồng hồ tròn + số giây ở góc trên phải, nhấp nháy giây cuối và tự gỡ hiệu ứng khi về 0. Nhấn lại cùng loại chỉ làm mới thời gian, không cộng dồn. Phím **8** đã bị bỏ cùng cơ chế +500 vàng; loại gạch vàng/coin cũng đã bị xóa khỏi game.
 
 Lưu ý: phím tắt không hoạt động khi con trỏ đang ở trong ô nhập liệu của modal đăng nhập.
 
@@ -179,7 +179,7 @@ Lưu ý: phím tắt không hoạt động khi con trỏ đang ở trong ô nh�
 
 - **TC15: Hình dạng và danh sách vật phẩm**
   - Thao tác: Quan sát vật phẩm rơi; kiểm tra bảng PowerUp.
-  - Kết quả mong muốn: Viên nhộng nằm ngang 72x24 px, phát sáng neon, nhãn chữ rõ ràng. Có đúng **7 loại** (WIDE, MINI, x3 MULTI, MEGA, +1 LIFE, LASER, NUKE); không còn vật phẩm vàng **+500**, gạch vàng vẫn đáng 300 điểm nhưng không rơi vật phẩm. Tỷ lệ rơi của gạch thường vẫn 6% và chia đều cho 7 loại.
+  - Kết quả mong muốn: Viên nhộng nằm ngang 72x24 px, phát sáng neon, nhãn chữ rõ ràng. Có đúng **7 loại** (WIDE, MINI, x3 MULTI, MEGA, +1 LIFE, LASER, NUKE); không còn vật phẩm vàng **+500** và cũng không còn gạch vàng/coin — mọi ô vàng cũ đã thành gạch thường 100 điểm. Tỷ lệ rơi của gạch thường vẫn 6% và chia đều cho 7 loại.
 
 ### Nhóm 4: Cơ Chế 3 Lượt Chơi Bảo Lưu Điểm Số
 
@@ -241,7 +241,7 @@ Lưu ý: phím tắt không hoạt động khi con trỏ đang ở trong ô nh�
 
 ## 4. Tiêu Chí Nghiệm Thu
 
-1. `npm test` (client): 173/173 PASS, exit code 0.
+1. `npm test` (client): 174/174 PASS, exit code 0.
 2. `mvn test` (server): 11/11 PASS, BUILD SUCCESS.
 3. `run-api-smoke.sh`: FAILED = 0.
 4. Kiểm thử tay TC01–TC27: 27/27 PASS theo checklist (27 dòng trong `QA_PANEL_CHECKLIST.md`).

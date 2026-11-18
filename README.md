@@ -73,7 +73,7 @@ arkanoid/
 │   └── Dockerfile              # Đóng gói backend nhiều tầng bằng OpenJDK 17
 ├── tests/                      # Toàn bộ tài nguyên kiểm thử QA
 │   ├── TEST_PLAN.md            # 27 ca kiểm thử và tiêu chí nghiệm thu
-│   ├── automated/              # Test client (173 kiểm tra) và smoke test REST API
+│   ├── automated/              # Test client (174 kiểm tra) và smoke test REST API
 │   ├── manual/                 # Checklist QA panel trong game
 │   ├── evidence/               # Ảnh bằng chứng
 │   └── reports/                # Báo cáo kết quả kiểm thử
@@ -171,7 +171,7 @@ Hệ thống đã tích hợp sẵn tệp cấu hình `render.yaml`. Quá trình
 Toàn bộ tài nguyên kiểm thử nằm trong thư mục [`tests/`](tests/).
 
 ```bash
-# 173 kiểm tra logic game (client + shared rules)
+# 174 kiểm tra logic game (client + shared rules)
 cd client && npm test
 
 # 11 test backend Spring Boot
