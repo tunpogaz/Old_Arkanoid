@@ -1,7 +1,7 @@
 import { Paddle } from './entities/Paddle.js';
 import { Ball } from './entities/Ball.js';
 import { Brick, BRICK_TYPES } from './entities/Brick.js';
-import { POWERUP_TYPES } from './entities/PowerUp.js';
+import { POWERUP_TYPES, POWERUP_META } from './entities/PowerUp.js';
 import { getMapByLevel } from './systems/MapData.js';
 import { sounds } from './systems/SoundManager.js';
 import { ParticleSystem } from './systems/ParticleSystem.js';
@@ -15,13 +15,20 @@ import {
   SURVIVAL_WAVE_INTERVAL,
   SURVIVAL_WAVE_MIN_INTERVAL,
   SURVIVAL_DESCENT_STEP,
+  SURVIVAL_ANIM_DURATION,
+  SURVIVAL_PUSHUP_STEP,
+  POWERUP_MUTEX,
   DANGER_LINE_Y,
   DANGER_ALERT_MARGIN,
   computeMultiBallSpawns,
   resolveAttemptFailure,
   isDangerBreach,
   isDangerAlert,
-  collectBlastTargets
+  collectBlastTargets,
+  computeSurvivalPushUpShift,
+  refreshPowerUpTimer,
+  tickPowerUpTimers,
+  isPowerUpTimerBlinking
 } from './systems/GameRules.js';
 
 export const GAME_MODES = {
@@ -64,6 +71,7 @@ class Game {
     this.comboTimer = 0;
     this.frameCount = 0;
     this.keys = { left: false, right: false };
+    this.powerTimers = {};
 
     // 3 Attempts / Continues System
     this.retriesLeft = MAX_RETRIES;
@@ -142,6 +150,52 @@ class Game {
     return this.bgImages[idx];
   }
 
+  /** Clear every timed power-up and restore the base paddle/ball state. */
+  resetPowerUpEffects() {
+    this.powerTimers = {};
+    this.paddle.setLength('NORMAL');
+    this.paddle.disableShooting();
+    for (const ball of this.balls) ball.resetSize();
+  }
+
+  /** Start (or refresh) a timed power-up. WIDE/MINI never run together. */
+  startPowerUpTimer(type) {
+    const opposite = POWERUP_MUTEX[type];
+    if (opposite) delete this.powerTimers[opposite];
+    refreshPowerUpTimer(this.powerTimers, type);
+  }
+
+  /** Undo the timed effects whose counters just reached zero. */
+  handleExpiredPowerUps(expired) {
+    for (const type of expired) {
+      if (type === POWERUP_TYPES.LONGER || type === POWERUP_TYPES.SHORTEN) {
+        this.paddle.setLength('NORMAL');
+        this.particles.addFloatingText(
+          'PADDLE NORMAL',
+          this.paddle.x + this.paddle.w / 2,
+          this.paddle.y - 20,
+          '#94a3b8'
+        );
+      } else if (type === POWERUP_TYPES.BIGGER_BALL) {
+        for (const ball of this.balls) ball.resetSize();
+        this.particles.addFloatingText(
+          'MEGA ENDED',
+          this.paddle.x + this.paddle.w / 2,
+          this.paddle.y - 20,
+          '#94a3b8'
+        );
+      } else if (type === POWERUP_TYPES.SHOT) {
+        this.paddle.disableShooting();
+        this.particles.addFloatingText(
+          'LASER OFF',
+          this.paddle.x + this.paddle.w / 2,
+          this.paddle.y - 20,
+          '#94a3b8'
+        );
+      }
+    }
+  }
+
   startCampaign(level = 1) {
     this.mode = GAME_MODES.CAMPAIGN;
     this.retriesLeft = this.maxRetries;
@@ -158,6 +212,7 @@ class Game {
     this.currentLevel = level;
     this.paddle.reset();
     this.paddle.lives = INITIAL_LIVES;
+    this.resetPowerUpEffects();
 
     // Ball starts attached to paddle until launched
     this.balls = [new Ball(this.paddle.x + this.paddle.w / 2, this.paddle.y - 14, true)];
@@ -174,6 +229,7 @@ class Game {
   retryCurrentLevel() {
     this.paddle.reset();
     this.paddle.lives = INITIAL_LIVES;
+    this.resetPowerUpEffects();
     this.balls = [new Ball(this.paddle.x + this.paddle.w / 2, this.paddle.y - 14, true)];
     this.powerups = [];
     this.combo = 0;
@@ -213,6 +269,7 @@ class Game {
     this.state = GAME_STATES.MENU;
     this.keys.left = false;
     this.keys.right = false;
+    this.resetPowerUpEffects();
     sounds.stopBgm();
     this.syncStateUI();
   }
@@ -272,6 +329,7 @@ class Game {
     this.mode = GAME_MODES.SURVIVAL;
     this.paddle.reset();
     this.paddle.lives = INITIAL_LIVES;
+    this.resetPowerUpEffects();
     this.score = 0;
     this.combo = 0;
     this.maxCombo = 0;
@@ -313,9 +371,10 @@ class Game {
     this.particles.addFloatingText('SURVIVAL MODE: DEFEND THE LINE!', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2, '#ef4444');
   }
 
-  spawnSurvivalTopRow() {
+  spawnSurvivalTopRow(rowIndex = 0, { animate = false } = {}) {
     const cols = 13;
     const paddingX = 14;
+    const paddingY = 8;
     const brickW = (this.bounds.w - (cols - 1) * paddingX) / cols;
     const brickH = 34;
 
@@ -329,8 +388,16 @@ class Game {
       else if (rand < 0.37) type = BRICK_TYPES.FALL_BOMB;
 
       const bx = this.bounds.x + c * (brickW + paddingX);
-      const by = this.bounds.y + 40;
-      this.bricks.push(new Brick(bx, by, brickW, brickH, type, 0, c));
+      const finalY = this.bounds.y + 40 + rowIndex * (brickH + paddingY);
+      const brick = new Brick(bx, finalY, brickW, brickH, type, rowIndex, c);
+
+      // Wave rows slide in from just above the playfield while fading in.
+      if (animate) {
+        brick.y = finalY - SURVIVAL_DESCENT_STEP;
+        brick.animateTo(finalY, SURVIVAL_ANIM_DURATION, { fadeIn: true });
+      }
+
+      this.bricks.push(brick);
     }
   }
 
@@ -391,6 +458,7 @@ class Game {
     }
 
     this.paddle.reset();
+    this.resetPowerUpEffects();
     this.balls = [new Ball(this.paddle.x + this.paddle.w / 2, this.paddle.y - 14, true)];
     this.powerups = [];
     this.loadMap(this.currentLevel);
@@ -406,7 +474,7 @@ class Game {
       this.paddle.lives--;
       sounds.playLoseBall();
       this.combo = 0;
-      this.paddle.setLength('NORMAL');
+      this.resetPowerUpEffects();
 
       if (this.paddle.lives <= 0) {
         if (this.mode === GAME_MODES.SURVIVAL) {
@@ -475,6 +543,33 @@ class Game {
 
     const pu = brick.spawnPowerUp();
     if (pu) this.powerups.push(pu);
+
+    // Survival PUSH brick: destroying it shoves the whole stack one row up.
+    if (brick.destroyed && this.mode === GAME_MODES.SURVIVAL && brick.type === BRICK_TYPES.PUSH) {
+      this.pushSurvivalBricksUp();
+    }
+  }
+
+  /** Survival PUSH effect: slide every surviving brick one row toward the ceiling. */
+  pushSurvivalBricksUp() {
+    const shift = computeSurvivalPushUpShift(this.bricks, SURVIVAL_PUSHUP_STEP, this.bounds.y);
+    if (shift <= 0) {
+      sounds.playTone(420, 0.06, 'triangle');
+      return;
+    }
+
+    for (const brick of this.bricks) {
+      if (brick.destroyed) continue;
+      brick.animateBy(-shift, SURVIVAL_ANIM_DURATION);
+    }
+
+    sounds.playTone(660, 0.12, 'square', 520);
+    this.particles.addFloatingText(
+      'PUSH UP! ⬆',
+      this.paddle.x + this.paddle.w / 2,
+      this.dangerLineY - 80,
+      '#14b8a6'
+    );
   }
 
   triggerAreaBlast(centerBrick) {
@@ -537,10 +632,12 @@ class Game {
     switch (pu.type) {
       case POWERUP_TYPES.LONGER:
         this.paddle.setLength('LONGER');
+        this.startPowerUpTimer(POWERUP_TYPES.LONGER);
         this.particles.addFloatingText('WIDE PADDLE!', this.paddle.x + this.paddle.w / 2, this.paddle.y - 20, '#38bdf8');
         break;
       case POWERUP_TYPES.SHORTEN:
         this.paddle.setLength('SHORTEN');
+        this.startPowerUpTimer(POWERUP_TYPES.SHORTEN);
         this.particles.addFloatingText('SHORT PADDLE!', this.paddle.x + this.paddle.w / 2, this.paddle.y - 20, '#f87171');
         break;
       case POWERUP_TYPES.DUPLICATE: {
@@ -557,6 +654,7 @@ class Game {
       }
       case POWERUP_TYPES.BIGGER_BALL:
         this.balls.forEach(b => b.setBigger());
+        this.startPowerUpTimer(POWERUP_TYPES.BIGGER_BALL);
         this.particles.addFloatingText('MEGA BALL!', this.paddle.x + this.paddle.w / 2, this.paddle.y - 20, '#fbbf24');
         break;
       case POWERUP_TYPES.LIFE_UP:
@@ -565,15 +663,12 @@ class Game {
         break;
       case POWERUP_TYPES.SHOT:
         this.paddle.enableShooting();
+        this.startPowerUpTimer(POWERUP_TYPES.SHOT);
         this.particles.addFloatingText('LASER GUNS! ⚡', this.paddle.x + this.paddle.w / 2, this.paddle.y - 20, '#ef4444');
         break;
       case POWERUP_TYPES.FALL_BOOM:
         this.triggerFallBoom();
         this.particles.addFloatingText('NUKE BLAST! 💣', this.paddle.x + this.paddle.w / 2, this.paddle.y - 20, '#f97316');
-        break;
-      case POWERUP_TYPES.GOLD:
-        this.score += 500;
-        this.particles.addFloatingText('+500 GOLD ⭐', this.paddle.x + this.paddle.w / 2, this.paddle.y - 20, '#eab308');
         break;
     }
   }
@@ -593,6 +688,10 @@ class Game {
 
     this.paddle.update(sounds);
 
+    // Timed power-ups advance only while PLAYING (Pause freezes the counters).
+    const expiredPowerUps = tickPowerUpTimers(this.powerTimers);
+    if (expiredPowerUps.length > 0) this.handleExpiredPowerUps(expiredPowerUps);
+
     if (this.comboTimer > 0) {
       this.comboTimer--;
       if (this.comboTimer <= 0) this.combo = 0;
@@ -600,6 +699,10 @@ class Game {
 
     // SURVIVAL MODE PROGRESSION
     if (this.mode === GAME_MODES.SURVIVAL) {
+      // Advance the slides first: collisions and the Danger Line always read
+      // the brick's real on-screen Y, never the animation destination.
+      for (const b of this.bricks) b.updateAnimation();
+
       this.survivalTime++;
       this.survivalWaveTimer++;
 
@@ -611,28 +714,27 @@ class Game {
           SURVIVAL_WAVE_INTERVAL - this.survivalWave * 15
         );
 
-        // Push existing bricks down
+        // Slide the whole stack down one row (eased, stacking on the logical target).
         for (const b of this.bricks) {
           if (!b.destroyed) {
-            b.y += SURVIVAL_DESCENT_STEP;
+            b.animateBy(SURVIVAL_DESCENT_STEP, SURVIVAL_ANIM_DURATION);
           }
         }
 
-        // Check Danger Line breach
-        for (const b of this.bricks) {
-          if (isDangerBreach(b, this.dangerLineY)) {
-            this.triggerSurvivalBreach();
-            return;
-          }
-        }
-
-        // Spawn new top row
-        this.spawnSurvivalTopRow();
+        // Spawn new top row, sliding in from just above the ceiling.
+        this.spawnSurvivalTopRow(0, { animate: true });
 
         sounds.playAlarm();
         this.particles.triggerScreenShake(10);
         this.particles.addFloatingText(`WAVE ${this.survivalWave} DESCENT! ⚠`, CANVAS_WIDTH / 2, this.dangerLineY - 40, '#f97316');
         this.score += this.survivalWave * 200;
+      }
+
+      // Breach is checked every frame against the live position, so a brick
+      // touching the line mid-slide ends the run at the exact pixel.
+      if (this.bricks.some(b => isDangerBreach(b, this.dangerLineY))) {
+        this.triggerSurvivalBreach();
+        return;
       }
 
       // Check alert distance
@@ -653,6 +755,7 @@ class Game {
         for (const b of this.bricks) {
           if (!b.destroyed) {
             b.y += 6;
+            b.targetY = b.y;
             if (b.y + b.h >= this.paddle.y) {
               this.handleBallLost(this.balls[0] || null);
             }
@@ -722,7 +825,7 @@ class Game {
         this.survivalWave++;
         this.particles.addFloatingText('WAVE CLEAR! +1,500 PTS ⭐', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2, '#fde047');
         for (let r = 0; r < 3; r++) {
-          this.spawnSurvivalTopRow();
+          this.spawnSurvivalTopRow(r, { animate: true });
         }
       } else {
         this.nextLevel();
@@ -773,6 +876,75 @@ class Game {
       ctx.font = 'bold 15px "Courier New", monospace';
       ctx.textAlign = 'left';
       ctx.fillText('🚨 HAZARD ALERT!', 420, 32);
+    }
+
+    ctx.restore();
+  }
+
+  /** Timed power-up counters: circular clock + remaining seconds, top-right. */
+  renderPowerUpTimers() {
+    const timers = Object.values(this.powerTimers);
+    if (timers.length === 0) return;
+
+    const ctx = this.ctx;
+    const pillW = 128;
+    const pillH = 26;
+    const gap = 8;
+    const top = this.bounds.y + 8;
+    let right = this.bounds.x + this.bounds.w - 10;
+
+    ctx.save();
+    ctx.textBaseline = 'middle';
+
+    for (let i = timers.length - 1; i >= 0; i--) {
+      const timer = timers[i];
+      const meta = POWERUP_META[timer.type] || {
+        label: timer.type,
+        border: '#38bdf8',
+        bg: '#0f172a',
+        text: '#f8fafc'
+      };
+      const ratio = Math.max(0, Math.min(1, timer.remaining / timer.duration));
+      const blink = isPowerUpTimerBlinking(timer);
+      const x = right - pillW;
+
+      ctx.globalAlpha = blink ? 0.35 + 0.65 * (Math.floor(timer.remaining / 6) % 2) : 1;
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.82)';
+      ctx.strokeStyle = meta.border;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.roundRect(x, top, pillW, pillH, pillH / 2);
+      ctx.fill();
+      ctx.stroke();
+
+      // Small clock: static ring plus a shrinking progress arc.
+      const cx = x + 15;
+      const cy = top + pillH / 2;
+      const radius = 8;
+      ctx.strokeStyle = 'rgba(148, 163, 184, 0.35)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+      ctx.stroke();
+
+      const end = -Math.PI / 2 + Math.PI * 2 * ratio;
+      ctx.strokeStyle = meta.border;
+      ctx.beginPath();
+      ctx.arc(cx, cy, radius, -Math.PI / 2, end);
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.lineTo(cx + Math.cos(end) * (radius - 2), cy + Math.sin(end) * (radius - 2));
+      ctx.stroke();
+
+      const seconds = Math.ceil(timer.remaining / 60);
+      ctx.fillStyle = meta.text;
+      ctx.font = 'bold 11px "Courier New", monospace';
+      ctx.textAlign = 'left';
+      ctx.fillText(`${meta.label} ${seconds}s`, x + 28, cy + 1);
+
+      right = x - gap;
     }
 
     ctx.restore();
@@ -841,6 +1013,7 @@ class Game {
 
       ctx.restore();
       this.renderHUD();
+      this.renderPowerUpTimers();
     } else if (this.state === GAME_STATES.RETRY) {
       ctx.restore();
       this.renderRetryOverlay();
@@ -872,7 +1045,7 @@ class Game {
     const px = 30;
     const py = 60;
     const pw = 450;
-    const ph = 195;
+    const ph = 222;
     ctx.beginPath();
     ctx.roundRect(px, py, pw, ph, 8);
     ctx.fill();
@@ -887,12 +1060,18 @@ class Game {
     ctx.fillText(`Trạng thái: ${this.state} | Chế độ: ${this.mode} | Số bóng: ${this.balls.length}`, px + 15, py + 52);
     ctx.fillText(`Mạng: ${this.paddle.lives} | Lượt còn: ${this.retriesLeft} | Màn: ${this.currentLevel} / 20`, px + 15, py + 74);
 
+    const timerText = Object.values(this.powerTimers)
+      .map(t => `${t.type}: ${Math.ceil(t.remaining / 60)}s`)
+      .join(' | ') || 'không có';
+    ctx.fillStyle = '#a5f3fc';
+    ctx.fillText(`Power-up đang chạy: ${timerText}`, px + 15, py + 96);
+
     ctx.fillStyle = '#fde047';
-    ctx.fillText('Phím 1 đến 8: Nhận ngay PowerUp tương ứng', px + 15, py + 105);
-    ctx.fillText('Phím 3: Thử nghiệm nhân 3 bóng Multi-Ball', px + 15, py + 126);
-    ctx.fillText('Phím L: Chuyển màn kế tiếp | Phím K: Xóa sạch gạch', px + 15, py + 147);
-    ctx.fillText('Phím G: Trừ mạng để test màn hình Retry', px + 15, py + 168);
-    ctx.fillText('Phím P/ESC: Pause menu | M: Về Menu | Space: Bắn', px + 15, py + 189);
+    ctx.fillText('Phím 1 đến 7: Nhận ngay PowerUp tương ứng', px + 15, py + 126);
+    ctx.fillText('Phím 3: Thử nghiệm nhân 3 bóng Multi-Ball', px + 15, py + 147);
+    ctx.fillText('Phím L: Chuyển màn kế tiếp | Phím K: Xóa sạch gạch', px + 15, py + 168);
+    ctx.fillText('Phím G: Trừ mạng để test màn hình Retry', px + 15, py + 189);
+    ctx.fillText('Phím P/ESC: Pause menu | M: Về Menu | Space: Bắn', px + 15, py + 210);
     ctx.restore();
   }
 
@@ -1140,7 +1319,6 @@ class Game {
         else if (e.key === '5') this.applyPowerUp({ type: POWERUP_TYPES.LIFE_UP });
         else if (e.key === '6') this.applyPowerUp({ type: POWERUP_TYPES.SHOT });
         else if (e.key === '7') this.applyPowerUp({ type: POWERUP_TYPES.FALL_BOOM });
-        else if (e.key === '8') this.applyPowerUp({ type: POWERUP_TYPES.GOLD });
         else if (e.key === 'l' || e.key === 'L') {
           if (this.mode === GAME_MODES.CAMPAIGN) this.nextLevel();
           else this.survivalWave++;

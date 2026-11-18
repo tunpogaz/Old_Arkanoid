@@ -1,5 +1,5 @@
 import { PowerUp, POWERUP_TYPES } from './PowerUp.js';
-import { shouldDropNormalPowerUp, shouldPierceBrick } from '../systems/GameRules.js';
+import { shouldDropNormalPowerUp, shouldPierceBrick, resolveAnimatedY, SURVIVAL_ANIM_DURATION } from '../systems/GameRules.js';
 
 export const BRICK_TYPES = {
   EMPTY: 0,
@@ -54,6 +54,51 @@ export class Brick {
     this.hp = type === BRICK_TYPES.IMMORTAL ? 999999 : 1;
     this.destroyed = false;
     this.points = type === BRICK_TYPES.GOLD ? 300 : 100;
+
+    // Smooth vertical animation (Survival waves and PUSH bricks).
+    this.targetY = y;
+    this.alpha = 1;
+    this.animStartY = y;
+    this.animElapsed = 0;
+    this.animDuration = 0;
+    this.fadeIn = false;
+  }
+
+  /** Slide to a new Y. Starting from the current displayed Y avoids snapping. */
+  animateTo(targetY, duration = SURVIVAL_ANIM_DURATION, { fadeIn = false } = {}) {
+    this.animStartY = this.y;
+    this.targetY = targetY;
+    this.animElapsed = 0;
+    this.animDuration = Math.max(0, duration);
+    this.fadeIn = !!fadeIn;
+    if (fadeIn) this.alpha = 0;
+  }
+
+  /** Add a delta to the current logical target (safe to stack mid-animation). */
+  animateBy(deltaY, duration = SURVIVAL_ANIM_DURATION, options = {}) {
+    this.animateTo(this.targetY + deltaY, duration, options);
+  }
+
+  /** Advance the slide; returns true on the frame the brick reaches its target. */
+  updateAnimation() {
+    if (this.animDuration <= 0) {
+      this.targetY = this.y;
+      return false;
+    }
+
+    this.animElapsed++;
+    const t = Math.min(1, this.animElapsed / this.animDuration);
+    this.y = resolveAnimatedY(this.animStartY, this.targetY, this.animElapsed, this.animDuration);
+    if (this.fadeIn) this.alpha = t;
+
+    if (t >= 1) {
+      this.y = this.targetY;
+      this.alpha = 1;
+      this.animDuration = 0;
+      this.animElapsed = 0;
+      return true;
+    }
+    return false;
   }
 
   isImmortal() {
@@ -79,7 +124,8 @@ export class Brick {
       return new PowerUp(this.x + this.w / 2, this.y + this.h / 2, POWERUP_TYPES.LIFE_UP);
     }
     if (this.type === BRICK_TYPES.GOLD) {
-      return new PowerUp(this.x + this.w / 2, this.y + this.h / 2, POWERUP_TYPES.GOLD);
+      // Gold bricks keep their 300 points but no longer drop a +500 pickup.
+      return null;
     }
     if (this.type === BRICK_TYPES.FALL_BOMB) {
       return new PowerUp(this.x + this.w / 2, this.y + this.h / 2, POWERUP_TYPES.FALL_BOOM);
@@ -140,11 +186,12 @@ export class Brick {
 
   render(ctx) {
     if (this.destroyed) return;
+    ctx.save();
+    ctx.globalAlpha = this.alpha;
     const img = brickImages[this.type];
     if (img && img.complete && img.naturalWidth > 0) {
       ctx.drawImage(img, this.x, this.y, this.w, this.h);
     } else {
-      ctx.save();
       ctx.fillStyle = this.getColor();
       ctx.beginPath();
       ctx.roundRect(this.x, this.y, this.w, this.h, 4);
@@ -152,7 +199,7 @@ export class Brick {
       ctx.strokeStyle = '#ffffff22';
       ctx.lineWidth = 1;
       ctx.stroke();
-      ctx.restore();
     }
+    ctx.restore();
   }
 }

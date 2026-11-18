@@ -2,7 +2,7 @@
 
 - **Ngày:** 2026-11-18
 - **Phạm vi:** toàn bộ client (game + QA panel), backend Spring Boot, tài liệu kiểm thử và hạ tầng test
-- **Kết luận nhanh:** tất cả tầng kiểm thử đều đạt (94 client + 11 backend + 24 API). Đã phát hiện và sửa **9 lỗi sản phẩm** trong game/backend cùng **1 vấn đề nghiêm trọng của bộ test cũ** (test "xanh giả"). Hạn chế Mega Ball đã được khắc phục ở đợt 2 (bóng xuyên gạch thường), cùng với menu tạm dừng và âm lượng 0–100%.
+- **Kết luận nhanh:** tất cả tầng kiểm thử đều đạt (173 client + 11 backend + 24 API). Đã phát hiện và sửa **9 lỗi sản phẩm** trong game/backend cùng **1 vấn đề nghiêm trọng của bộ test cũ** (test "xanh giả"). Các đợt sau bổ sung Mega Ball xuyên gạch, menu tạm dừng, âm lượng 0–100%, sửa lỗi PUSH ở Survival, animation wave mượt, bộ đếm power-up và bỏ cơ chế +500 vàng.
 
 ---
 
@@ -23,30 +23,33 @@
 
 | Tầng | Lệnh | Kết quả |
 | :--- | :--- | :--- |
-| Client automated | `cd client && npm test` | **94/94 PASS, 0 FAIL** |
+| Client automated | `cd client && npm test` | **173/173 PASS, 0 FAIL** |
 | Backend JUnit | `cd server && mvn test` | **11/11 PASS** (10 integration + 1 context load), BUILD SUCCESS |
 | REST API smoke (server thật) | `bash tests/automated/run-api-smoke.sh http://localhost:8080` | **24/24 PASS, FAILED: 0** |
 | Leaderboard nhiều người chơi | kiểm tra trực tiếp sau khi restart backend | **1 dòng/người chơi, đúng điểm cao nhất** |
-| Production build | `cd client && npm run build` | 14 modules, JS 49.47 kB (gzip 14.46 kB) |
+| Production build | `cd client && npm run build` | 14 modules, JS 56.79 kB (gzip 16.65 kB) |
 | Trình duyệt (E2E thủ công có đo đạc) | QA panel + gameplay + survival | Tất cả kịch bản đạt sau khi sửa lỗi |
 
 ---
 
 ## 3. Chi Tiết Theo Tầng
 
-### 3.1. Client — 94 kiểm tra tự động
+### 3.1. Client — 173 kiểm tra tự động
 
-Bộ test import **module thật** của game (không dùng mock cho logic), gồm 9 nhóm:
+Bộ test import **module thật** của game (không dùng mock cho logic), gồm 12 nhóm:
 
 1. **20 màn chơi & cụm domino** — đủ 20 level, dữ liệu gạch hợp lệ, cụm domino có gạch nổ.
-2. **GameRules dùng chung & chuẩn hóa URL API** — hằng số, `normalizeApiUrl`, biên màn chơi.
+2. **GameRules dùng chung & chuẩn hóa URL API** — hằng số, `normalizeApiUrl`, biên màn chơi, clamp âm lượng.
 3. **x3 Multi-Ball** — dùng đúng helper `computeMultiBallSpawns` mà `main.js` gọi; kiểm tra góc quạt, giới hạn 18 bóng, bóng không trùng.
-4. **Power-up & tỷ lệ rơi 6%** — stub `Math.random` để kiểm tra xác định, không lấy mẫu ngẫu nhiên.
+4. **Power-up & tỷ lệ rơi 6%** — stub `Math.random` để kiểm tra xác định; đúng 7 loại sau khi bỏ vàng, nhãn không còn +500, gạch vàng 300 điểm nhưng không rơi vật phẩm, TODO tương lai còn đúng một dòng.
 5. **Hệ 3 lượt / 2 lần tiếp tục** — `resolveAttemptFailure` trả `RETRY` rồi `GAMEOVER` đúng thứ tự.
 6. **Đường nguy hiểm survival** — biên cảnh báo và biên thua chính xác đến từng pixel.
 7. **Lan truyền domino thật** — `collectBlastTargets` đệ quy qua gạch nổ, chặn gạch bất tử/đã phá, không trùng mục tiêu.
-8. **Paddle & phóng bóng xác định** — kích thước 140/224/91px, di chuyển 12px/frame, ngắm trái/phải, tốc độ phóng 7.5px/frame, luôn hướng lên.
-9. **Mega Ball xuyên gạch** — giữ nguyên vector khi chạm gạch thường, vẫn nảy khỏi gạch bất tử; kèm kiểm tra clamp âm lượng 0–100%.
+8. **Paddle & phóng bóng xác định** — kích thước 140/224/91px, di chuyển 12px/frame, ngắm trái/phải, tốc độ phóng 7.5px/frame.
+9. **Mega Ball xuyên gạch** — giữ nguyên vector khi chạm gạch thường, vẫn nảy khỏi gạch bất tử.
+10. **PUSH & animation Survival** — đẩy lên đúng 42px và kẹp trần, easeInOutQuad, va chạm/vạch đỏ dùng Y hiển thị, chồng sóng giữa animation, hàng mới fade-in.
+11. **Bộ đếm power-up** — thời lượng 10s/10s/9s/7.5s, làm mới không cộng dồn, đếm lùi theo frame, đóng băng khi pause, nhấp nháy 60 frame cuối, WIDE/MINI loại trừ nhau.
+12. **Hết hạn hiệu ứng** — paddle về 140px, bóng về bán kính 11, laser tắt và không tự bắn nữa.
 
 ### 3.2. Backend — 11 test JUnit
 
@@ -72,7 +75,7 @@ Kiểm tra bổ sung ngoài script: tạo **Alice** (500, 900, 300) và **Bob** 
 | Di chuyển paddle, chặn biên, không điều khiển bằng chuột | Đạt |
 | Ngắm trái/phải, phóng bóng, tốc độ 7.5 | Đạt |
 | x3 Multi-Ball, giới hạn 18 bóng | Đạt |
-| Toàn bộ power-up 1–8 qua QA panel | Đạt |
+| Toàn bộ power-up 1–7 qua QA panel (không còn phím 8) | Đạt |
 | Phím K (phá gạch), L (qua màn), G (mất mạng), P (pause) | Đạt |
 | `M` / `ESC` khi đang chơi | Về **MENU** (trước đây không phản hồi) |
 | Gõ phím trong ô input | Không làm paddle di chuyển (`moved: 0`, state giữ `PLAYING`) |
@@ -107,6 +110,7 @@ Ngoài ra đã gia cố: keydown bỏ qua `INPUT/TEXTAREA/SELECT/contentEditable
 - **Mega Ball** (phím QA `4`) đã được nâng cấp ở đợt 2: bóng xuyên qua và phá liên tiếp gạch thường mà không đổi hướng; gạch bất tử vẫn làm bóng nảy lại. Hành vi mới được ghi ở TC12 và kiểm tra tự động ở Group 9.
 - Backend chạy JDK 25 trong khi target là Java 17: có cảnh báo `restricted method` của Tomcat, không ảnh hưởng kết quả test.
 - Screenshot trong `tests/evidence/` được chụp trước lượt sửa cuối; các kết quả sau sửa được xác minh bằng số liệu đo trong trình duyệt và output test.
+- Đợt 3 xác minh bằng trạng thái runtime/canvas đo trực tiếp trong trình duyệt (vị trí gạch, bộ đếm, va chạm); cửa sổ in-app browser không cung cấp surface hiển thị nên không chụp được screenshot mới.
 
 ---
 
@@ -158,3 +162,50 @@ Ba tầng kiểm thử hiện đều **xanh và có ý nghĩa**: client chạy l
 - P/ESC mở menu tạm dừng; M về menu chính ngay. Game hoàn toàn đứng yên khi pause.
 - Mega Ball xuyên gạch thường nhưng vẫn nảy khỏi gạch bất tử.
 - Kiểm tra bổ sung: 15 test tự động mới (tổng **94/94**) và xác minh trên trình duyệt: nút pause, overlay, 3 nút, slider 23% → BGM 0.092, 0% im lặng, 100% = 0.4, lưu/khôi phục 37% sau reload, REPLAY giữ điểm 1234 và nạp lại 81 gạch. Đợt chỉnh UI cuối: nút pause chỉ còn biểu tượng; không còn "Guest"; nút loa header tắt/mở đúng và thanh âm lượng trong pause menu vẫn hoạt động khi đang tắt tiếng.
+
+---
+
+## 10. Bổ Sung Đợt 3 — PUSH Survival, Animation, Bộ Đếm Power-Up, Bỏ Vàng
+
+### 10.1. Nguyên nhân gốc lỗi PUSH không đẩy hàng trên
+
+Tái hiện bằng QA panel + đo trực tiếp trong trình duyệt:
+
+```text
+mode: SURVIVAL, state: PLAYING, pushDestroyed: true,
+beforeTopY: [100 x13], afterTopY: [100 x13], changed: false, bricksAlive: 51
+```
+
+Gạch PUSH bị phá nhưng **không có handler đẩy hàng** trong client Canvas. `hitBrick()` chỉ gọi `takeHit()` rồi biến mất; hiệu ứng `doPushBrick` của bản Java tham chiếu (`PlayingProcess.java` + `SpecialBrickEffect.java`) chưa từng được port sang. Đây là thiếu logic, không phải lỗi animation.
+
+Cách sửa tại gốc: thêm `computeSurvivalPushUpShift()` vào `GameRules.js` (dùng `targetY` logic, kẹp trần `bounds.y = 60`, bỏ qua gạch đã phá) và gọi `pushSurvivalBricksUp()` ngay sau khi PUSH vỡ bởi bóng/đạn trong Survival. Mọi gạch còn sống dùng `animateBy(-shift)` nên trượt lên mượt đúng 42px, không nhảy.
+
+### 10.2. Animation wave
+
+- Hằng số mới: `SURVIVAL_ANIM_DURATION = 45` frame (~0,75 giây), `SURVIVAL_PUSHUP_STEP = 42`.
+- `Brick` có `targetY` logic + `y` hiển thị; `animateTo`/`animateBy` bắt đầu từ `y` thực và chạy `easeInOutQuad`; hàng mới spawn ở `finalY - 42`, `alpha = 0` rồi fade-in.
+- Va chạm bóng/đạn, `isDangerBreach`, `isDangerAlert` đọc `brick.y` hiện tại mỗi frame, không dùng đích đến.
+- Sóng mới giữa animation cộng dồn trên `targetY` và khởi động lại từ vị trí hiển thị; Pause chỉ đơn giản không gọi `update()` nên animation và bộ đếm đứng yên.
+
+Số liệu trình duyệt: `y 100 → 109.33 (sau 16 frame) → 142 (sau 51 frame)`; 13 gạch hàng mới đạt `y=100`, `alpha=1`; va chạm tại ô cũ `false`, tại vị trí đang vẽ `true`; Pause giữ `y=104.15` suốt 30 frame rồi chạy tiếp; chồng 2 sóng đạt đúng `target=184, y=184`.
+
+### 10.3. Bộ đếm power-up
+
+- Thời lượng: WIDE 600 frame (10s), MINI 600, MEGA 550 (~9s), LASER 450 (7.5s); x3/+1 LIFE/NUKE không có bộ đếm.
+- HUD góc trên phải vẽ viên thuốc + đồng hồ tròn (vòng tiến trình + kim), số giây còn lại, nhấp nháy 60 frame cuối.
+- Nhấn lại làm mới về đầy; WIDE/MINI loại trừ nhau; hết giờ tự trả paddle 140px/bóng bán kính 11/tắt laser.
+- Reset khi mất mạng, REPLAY, đổi màn, về menu; đóng băng khi Pause; phím QA 1–6 đi qua đúng `applyPowerUp` thật.
+- Đo trình duyệt: pause 60 frame giữ nguyên `450`; chạy 120 frame còn `330`; chạy tiếp 600 frame xóa sạch 3 bộ đếm, paddle `140`, bóng `11`, `canShoot=false`.
+
+### 10.4. Bỏ cơ chế +500 vàng
+
+- Xóa `GOLD` khỏi `POWERUP_TYPES`/`POWERUP_META`/ảnh, xóa case +500 và phím QA 8; debug panel còn "Phím 1 đến 7".
+- Gạch vàng vẫn 300 điểm nhưng `spawnPowerUp()` trả `null`; tỷ lệ 6% của gạch thường chia đều cho 7 loại.
+- Chỉ giữ đúng một TODO: `Tương lai: thêm lại nhặt vàng để mua skin paddle`. Không thêm hệ tiền tệ.
+- Đo trình duyệt: 300 lần rơi ngẫu nhiên chỉ ra 7 loại, không có `GOLD`; phím 8 không đổi điểm; không có lỗi/warning console.
+
+### 10.5. Kết quả kiểm thử đợt 3
+
+- `cd client && npm test`: **173/173 PASS, FAILED: 0**, exit code 0 (tăng 79 kiểm tra so với 94).
+- `npm run build`: thành công, 14 modules, JS 56.79 kB (gzip 16.65 kB).
+- Trình duyệt: wave mượt, PUSH lên đúng (kẹp trần 40px ở lần đầu do hàng trên ở y=100 rồi 0px khi sát trần), bộ đếm hiển thị/đếm lùi/đóng băng/hết hạn đúng, không còn vàng/phím 8, không có lỗi console.

@@ -12,19 +12,20 @@ Dự án trò chơi Arkanoid phiên bản trực tuyến hiện đại, kết h�
 
 ### 1. Chế Độ Chơi Đa Dạng
 - **Campaign Mode:** Chuỗi 20 màn chơi thiết kế thủ công với độ khó tăng dần. Màn 1 kích hoạt hiệu ứng nổ dây chuyền Domino hoành tráng khi đánh trúng bom trung tâm. Các màn tiếp theo xuất hiện gạch di chuyển, hàng rào kim cương và phòng trùm cuối.
-- **Survival Mode:** Chế độ sinh tồn vô tận. Các hàng gạch liên tục tiến xuống theo từng đợt sóng. Người chơi phải bảo vệ vạch laser đỏ Danger Line, nếu gạch chạm vạch sẽ thất bại ngay lập tức.
+- **Survival Mode:** Chế độ sinh tồn vô tận. Các hàng gạch liên tục tiến xuống theo từng đợt sóng với animation trượt mượt ~0,75 giây; gạch PUSH bị phá sẽ đẩy cả khối lên một hàng. Người chơi phải bảo vệ vạch laser đỏ Danger Line, nếu gạch chạm vạch sẽ thất bại ngay lập tức.
 - **Cơ Chế 3 Lượt Chơi:** Mỗi lượt chiến dịch có 3 mạng. Khi hết mạng, điểm số được bảo lưu và người chơi có 2 lượt hồi sinh (tổng cộng 3 lần thử màn hiện tại).
 
 ### 2. Vật Phẩm Neon Dạng Viên Nhộng
 Các vật phẩm rơi được tạo hình viên nhộng phát sáng nằm ngang với kích thước 72x24 pixel, gắn nhãn rõ ràng và hoàn toàn khác biệt với quả bóng:
-- `↔ WIDE`: Mở rộng thanh paddle
-- `>< MINI`: Thu hẹp thanh paddle
-- `x3 MULTI`: Nhân ba bóng trên màn hình
-- `● MEGA`: Biến bóng thành kích thước khổng lồ phá hủy mọi chướng ngại
-- `❤️ +1 LIFE`: Tăng thêm một mạng dự phòng
-- `⚡ LASER`: Trang bị súng đôi bắn đạn phá hủy gạch và kích nổ bom từ xa
-- `💣 NUKE`: Bom hạt nhân phá hủy hàng loạt gạch
-- `⭐ +500`: Cộng ngay 500 điểm thưởng
+- `↔ WIDE`: Mở rộng thanh paddle (10 giây, có đồng hồ đếm trên HUD)
+- `>< MINI`: Thu hẹp thanh paddle (10 giây, thay thế WIDE nếu đang có)
+- `x3 MULTI`: Nhân ba bóng trên màn hình (tức thời)
+- `● MEGA`: Biến bóng thành kích thước khổng lồ, xuyên phá gạch thường (~9 giây)
+- `❤️ +1 LIFE`: Tăng thêm một mạng dự phòng (tức thời)
+- `⚡ LASER`: Trang bị súng đôi bắn đạn phá hủy gạch và kích nổ bom từ xa (~7,5 giây)
+- `💣 NUKE`: Bom hạt nhân phá hủy hàng loạt gạch (tức thời)
+
+Mọi hiệu ứng có thời hạn đều hiển thị đồng hồ tròn + số giây ở góc trên phải, nhấp nháy ở giây cuối và tự gỡ khi hết giờ. Nhặt lại cùng loại chỉ làm mới thời gian, không cộng dồn.
 
 ### 3. Điều Khiển & Vật Lý Chuẩn Xác
 - **Phát bóng có laser định hướng:** Quả bóng trên paddle chiếu tia laser dạng chấm sáng neon hiển thị hướng bay trước khi bắn. Người chơi làm chủ 100% góc phát bóng bằng phím di chuyển, không có yếu tố ngẫu nhiên.
@@ -72,7 +73,7 @@ arkanoid/
 │   └── Dockerfile              # Đóng gói backend nhiều tầng bằng OpenJDK 17
 ├── tests/                      # Toàn bộ tài nguyên kiểm thử QA
 │   ├── TEST_PLAN.md            # 27 ca kiểm thử và tiêu chí nghiệm thu
-│   ├── automated/              # Test client (94 kiểm tra) và smoke test REST API
+│   ├── automated/              # Test client (173 kiểm tra) và smoke test REST API
 │   ├── manual/                 # Checklist QA panel trong game
 │   ├── evidence/               # Ảnh bằng chứng
 │   └── reports/                # Báo cáo kết quả kiểm thử
@@ -170,7 +171,7 @@ Hệ thống đã tích hợp sẵn tệp cấu hình `render.yaml`. Quá trình
 Toàn bộ tài nguyên kiểm thử nằm trong thư mục [`tests/`](tests/).
 
 ```bash
-# 94 kiểm tra logic game (client + shared rules)
+# 173 kiểm tra logic game (client + shared rules)
 cd client && npm test
 
 # 11 test backend Spring Boot

@@ -5,8 +5,8 @@ export const POWERUP_TYPES = {
   BIGGER_BALL: 'BIGGER_BALL',
   LIFE_UP: 'LIFE_UP',
   SHOT: 'SHOT',
-  FALL_BOOM: 'FALL_BOOM',
-  GOLD: 'GOLD'
+  FALL_BOOM: 'FALL_BOOM'
+  // TODO: Tương lai: thêm lại nhặt vàng để mua skin paddle.
 };
 
 export const POWERUP_META = {
@@ -58,13 +58,6 @@ export const POWERUP_META = {
     border: '#eab308',
     text: '#fef08a',
     glow: '#eab308'
-  },
-  GOLD: {
-    label: '⭐ +500',
-    bg: '#362b00',
-    border: '#fbbf24',
-    text: '#fef3c7',
-    glow: '#fbbf24'
   }
 };
 
@@ -75,8 +68,7 @@ const POWERUP_IMAGES = {
   BIGGER_BALL: '/assets/image/BiggerBallPowerUp.png',
   LIFE_UP: '/assets/image/LifeUpPowerUp.png',
   SHOT: '/assets/image/ShotPowerUp.png',
-  FALL_BOOM: '/assets/image/FallBoomPowerUp.png',
-  GOLD: '/assets/image/GoldPowerUp.png'
+  FALL_BOOM: '/assets/image/FallBoomPowerUp.png'
 };
 
 const loadedImages = {};

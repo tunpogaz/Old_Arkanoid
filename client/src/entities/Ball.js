@@ -11,7 +11,6 @@ export class Ball {
     this.active = true;
     this.isAttached = isAttached;
     this.isBigger = false;
-    this.bigTimer = 0;
     this.animTick = 0;
     this.currentPaddle = null;
     this.attachOffsetRatio = 0;
@@ -42,7 +41,6 @@ export class Ball {
   setBigger() {
     this.isBigger = true;
     this.r = 19;
-    this.bigTimer = 550;
   }
 
   resetSize() {
@@ -60,13 +58,6 @@ export class Ball {
       this.x = paddle.x + paddle.w / 2 + this.attachOffsetRatio * (paddle.w / 2);
       this.y = paddle.y - this.r - 2;
       return false;
-    }
-
-    if (this.isBigger) {
-      this.bigTimer--;
-      if (this.bigTimer <= 0) {
-        this.resetSize();
-      }
     }
 
     if (particles && Math.random() < 0.65) {

@@ -13,8 +13,21 @@ export const BLAST_RADIUS = 150;
 export const SURVIVAL_WAVE_INTERVAL = 540; // 9 seconds at 60 FPS
 export const SURVIVAL_WAVE_MIN_INTERVAL = 300;
 export const SURVIVAL_DESCENT_STEP = 42;
+export const SURVIVAL_ANIM_DURATION = 45;   // ~0.75s at 60 FPS for a wave slide
+export const SURVIVAL_PUSHUP_STEP = SURVIVAL_DESCENT_STEP;
 export const DANGER_LINE_Y = CANVAS_HEIGHT - 130;
 export const DANGER_ALERT_MARGIN = 55;
+
+// Timed power-up durations in frames (60 FPS).
+export const POWERUP_DURATIONS = Object.freeze({
+  LONGER: 600,       // WIDE  ~10s
+  SHORTEN: 600,      // MINI  ~10s
+  BIGGER_BALL: 550,  // MEGA  ~9.2s
+  SHOT: 450          // LASER ~7.5s
+});
+export const POWERUP_EXPIRY_BLINK_FRAMES = 60;
+// WIDE and MINI replace one another instead of stacking.
+export const POWERUP_MUTEX = Object.freeze({ LONGER: 'SHORTEN', SHORTEN: 'LONGER' });
 
 export const DEFAULT_VOLUME = 0.5;
 export const VOLUME_STORAGE_KEY = 'arkanoid_volume';
@@ -121,6 +134,73 @@ export function isDangerAlert(brick, dangerLineY = DANGER_LINE_Y, margin = DANGE
 /** Normal bricks drop a random power-up at a fixed 6% rate. */
 export function shouldDropNormalPowerUp(roll, rate = NORMAL_BRICK_DROP_RATE) {
   return roll < rate;
+}
+
+/** Ease-in-out curve used by the Survival descent animation. */
+export function easeInOutQuad(t) {
+  const clamped = Math.min(1, Math.max(0, t));
+  return clamped < 0.5
+    ? 2 * clamped * clamped
+    : 1 - Math.pow(-2 * clamped + 2, 2) / 2;
+}
+
+/**
+ * Y position of a brick between two targets. Collisions and the Danger Line
+ * always use the brick's live `y`, which this function drives frame by frame.
+ */
+export function resolveAnimatedY(startY, targetY, elapsed, duration = SURVIVAL_ANIM_DURATION) {
+  if (duration <= 0) return targetY;
+  const t = Math.min(1, Math.max(0, elapsed / duration));
+  return startY + (targetY - startY) * easeInOutQuad(t);
+}
+
+/** Logical (post-animation) Y of a brick, used when stacking wave/push shifts. */
+export function getLogicalBrickY(brick) {
+  if (!brick) return 0;
+  return Number.isFinite(brick.targetY) ? brick.targetY : brick.y;
+}
+
+/**
+ * Survival PUSH brick: shift every brick upward by one descent step, but never
+ * above the playfield ceiling. Returns 0 when there is no room left.
+ */
+export function computeSurvivalPushUpShift(bricks, step = SURVIVAL_PUSHUP_STEP, topLimit = 0) {
+  const alive = (bricks || []).filter(b => b && !b.destroyed);
+  if (alive.length === 0) return 0;
+
+  let highest = Infinity;
+  for (const brick of alive) {
+    highest = Math.min(highest, getLogicalBrickY(brick));
+  }
+  return Math.max(0, Math.min(step, highest - topLimit));
+}
+
+/** Create or refresh a timed power-up. Re-picking the same type never stacks. */
+export function refreshPowerUpTimer(timers, type, duration = POWERUP_DURATIONS[type]) {
+  if (!timers || !type || !duration || duration <= 0) return timers;
+  timers[type] = { type, duration, remaining: duration };
+  return timers;
+}
+
+/** Advance every active timer by `frames`; returns the types that just expired. */
+export function tickPowerUpTimers(timers, frames = 1) {
+  const expired = [];
+  if (!timers) return expired;
+
+  for (const type of Object.keys(timers)) {
+    const timer = timers[type];
+    timer.remaining -= frames;
+    if (timer.remaining <= 0) {
+      delete timers[type];
+      expired.push(type);
+    }
+  }
+  return expired;
+}
+
+/** True during the final second, when the HUD counter blinks as a warning. */
+export function isPowerUpTimerBlinking(timer, blinkFrames = POWERUP_EXPIRY_BLINK_FRAMES) {
+  return !!timer && timer.remaining > 0 && timer.remaining <= blinkFrames;
 }
 
 /**

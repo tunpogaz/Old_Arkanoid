@@ -14,7 +14,7 @@ export class Paddle {
     this.lastDirection = 0;
     this.lives = 3;
     this.canShoot = false;
-    this.shootTimer = 0;
+    this.shotCooldown = 0;
     this.bullets = [];
 
     this.img = new Image();
@@ -27,6 +27,7 @@ export class Paddle {
     this.dx = 0;
     this.lastDirection = 0;
     this.canShoot = false;
+    this.shotCooldown = 0;
     this.bullets = [];
   }
 
@@ -42,7 +43,12 @@ export class Paddle {
 
   enableShooting() {
     this.canShoot = true;
-    this.shootTimer = 450; // frames (~7.5s)
+    this.shotCooldown = 12; // next auto-shot lands about 10 frames later
+  }
+
+  disableShooting() {
+    this.canShoot = false;
+    this.shotCooldown = 0;
   }
 
   fire(sounds) {
@@ -83,12 +89,9 @@ export class Paddle {
     this.clamp();
 
     if (this.canShoot) {
-      this.shootTimer--;
-      if (this.shootTimer % 22 === 0) {
+      this.shotCooldown++;
+      if (this.shotCooldown % 22 === 0) {
         this.fire(sounds);
-      }
-      if (this.shootTimer <= 0) {
-        this.canShoot = false;
       }
     }
 
